@@ -1,0 +1,65 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CUSTOMER
+  MERCHANT
+}
+
+enum TransactionType {
+  EARN
+  REDEEM
+  RESET
+  ADJUSTMENT
+}
+
+model User {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  phoneNumber    String         @unique // Automatically compiles a unique index in MongoDB!
+  role           Role
+  passwordHash   String?        // Populated only for MERCHANTS
+  birthdateHash  String?        // Populated only for CUSTOMERS
+  
+  // Embedded Points Balances
+  currentPoints  Int            @default(0)
+  pendingPoints  Int            @default(0)
+  version        Int            @default(0) // Optimistic Locking Version Key
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  
+  // Relationships mapping transactions
+  transactions   Transaction[]  @relation("CustomerTransactions")
+  operatedTx     Transaction[]  @relation("MerchantTransactions")
+}
+
+model Transaction {
+  id                   String          @id @default(auto()) @map("_id") @db.ObjectId
+  customerId           String          @db.ObjectId
+  customer             User            @relation("CustomerTransactions", fields: [customerId], references: [id], onDelete: Cascade)
+  
+  type                 TransactionType
+  currentChange        Int             // E.g., +1, -5, -currentPoints, -x (adjustment)
+  pendingChange        Int             // E.g., 0, -pendingRefill, -pendingPoints, -y (adjustment)
+  resultingCurrent     Int
+  resultingPending     Int
+  
+  customerPhoneNumber  String          // Denormalized for high-speed single-collection searches!
+  tokenHash            String?         @unique // Idempotency check: blocks double-spending if Redis partition fails
+
+  operatorId           String?         @db.ObjectId // Optional: NULL for customer-initiated REDEEM
+  operator             User?           @relation("MerchantTransactions", fields: [operatorId], references: [id])
+  
+  createdAt            DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([customerPhoneNumber])
+  @@index([operatorId, createdAt])
+  @@index([createdAt])
+}

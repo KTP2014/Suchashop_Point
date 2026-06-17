@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* =================================================================
+   SUCHA MINIMALIST PINK CAT CAFE: GLOBAL STYLES & ANIMATIONS
+   ================================================================= */
+
+:root {
+  /* Pastel Pink Cafe Backgrounds */
+  --bg-pastel-pink: #FFF5F6;
+  --bg-milk-pink: #FFF0F2;
+  --bg-soft-pink: #FFE2E6;
+
+  /* Clean White Card Themes */
+  --card-white: #FFFFFF;
+  --card-light-gray: #F9F9F9;
+
+  /* Cozy Pastel Cat Colors */
+  --cat-warm-gray: #5C5556;
+  --cat-pink-nose: #FF8EAA;
+  
+  /* Accent Pink Colors (Matte Cafe Pink) */
+  --accent-matte-pink: #FF7DA0;
+  --accent-hover-pink: #FF6B92;
+  --accent-border-pink: #FFD4DD;
+  
+  --foreground: #4A3E3F;
+}
+
+body {
+  background-color: var(--bg-pastel-pink);
+  color: var(--foreground);
+  font-family: 'Quicksand', 'Kanit', sans-serif;
+  overflow-x: hidden;
+  background-image: radial-gradient(var(--bg-soft-pink) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+}
+
+/* =================================================================
+   CUSTOM CSS MICRO-ANIMATIONS (LIGHTWEIGHT & CUTE)
+   ================================================================= */
+
+/* 1. Cat Ear Wiggle Animation */
+@keyframes ear-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  5% { transform: rotate(-5deg); }
+  10% { transform: rotate(4deg); }
+  15% { transform: rotate(-3deg); }
+  20% { transform: rotate(2deg); }
+  25% { transform: rotate(0deg); }
+}
+
+.animate-ear-wiggle {
+  animation: ear-wiggle 6s ease-in-out infinite;
+}
+
+/* 2. Soft Card Hover Float */
+.hover-float {
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease;
+}
+
+.hover-float:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(92, 85, 86, 0.06);
+}
+
+/* 3. Dynamic Cat Tail Swing (Rotates around the tail base) */
+@keyframes tail-swing {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(15deg); }
+}
+
+.animate-tail-swing {
+  transform-origin: 30px 45px; /* Pivot coordinates matching tail attachment point */
+  animation: tail-swing 2.5s ease-in-out infinite;
+}
+
+/* 4. Cute Floating Stamp Animation */
+@keyframes stamp-float {
+  0%, 100% { transform: translateY(0) rotate(12deg); }
+  50% { transform: translateY(-3px) rotate(15deg); }
+}
+
+.animate-stamp-float {
+  animation: stamp-float 4s ease-in-out infinite;
+}
+
+/* Custom Shake on Error */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.3s ease-in-out;
+}

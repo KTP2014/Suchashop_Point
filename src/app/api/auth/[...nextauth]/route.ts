@@ -11,6 +11,7 @@ export const authOptions: NextAuthOptions = {
       // ✅ ลบ "placeholder_id" และ "placeholder_secret" ออกทั้งหมดเรียบร้อย
       clientId: process.env.LINE_CLIENT_ID!,
       clientSecret: process.env.LINE_CLIENT_SECRET!,
+      authorization: { params: { scope: "profile openid" } },
     }),
   ],
   callbacks: {

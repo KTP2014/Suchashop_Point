@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
   providers: [
     LineProvider({
       // ✅ ลบ "placeholder_id" และ "placeholder_secret" ออกทั้งหมดเรียบร้อย
-      clientId: process.env.LINE_CLIENT_ID!,
+      clientId: process.env.LINE_CHANNEL_ID!,
       clientSecret: process.env.LINE_CLIENT_SECRET!,
       authorization: { params: { scope: "profile openid" } },
     }),

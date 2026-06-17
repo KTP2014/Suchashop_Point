@@ -112,7 +112,7 @@ export class PointsMutationService {
 
           const transaction = await this.transactionRepository.createTransaction(tx, {
             customerId,
-            customerPhoneNumber: customer.phoneNumber,
+            customerPhoneNumber: customer.phoneNumber ?? (customer.lineUserId ? `LINE:${customer.lineUserId}` : "LINE_USER"),
             type: TransactionType.EARN,
             currentChange: currentNew - currentOld,
             pendingChange: pendingNew - pendingOld,
@@ -262,7 +262,7 @@ export class PointsMutationService {
           // Write redemption transaction ledger mapped to the scanning merchant!
           const transaction = await this.transactionRepository.createTransaction(tx, {
             customerId,
-            customerPhoneNumber: user.phoneNumber,
+            customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
             type: TransactionType.REDEEM,
             currentChange: -5,
             pendingChange: pendingNew - pendingOld,
@@ -333,7 +333,7 @@ export class PointsMutationService {
 
       const transaction = await this.transactionRepository.createTransaction(tx, {
         customerId,
-        customerPhoneNumber: user.phoneNumber,
+        customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
         type: TransactionType.RESET,
         currentChange,
         pendingChange,
@@ -387,7 +387,7 @@ export class PointsMutationService {
 
       await this.transactionRepository.createTransaction(tx, {
         customerId,
-        customerPhoneNumber: user.phoneNumber,
+        customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
         type: TransactionType.ADJUSTMENT,
         currentChange: currentNew - user.currentPoints,
         pendingChange: pendingNew - user.pendingPoints,

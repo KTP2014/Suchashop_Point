@@ -12,22 +12,32 @@ async function main() {
   // Hash the password with 12 work rounds
   const passwordHash = bcrypt.hashSync(defaultPassword, 12);
 
-  // Upsert merchant to prevent duplicate seed exceptions
-  const merchant = await prisma.user.upsert({
+  // Find existing merchant first since phoneNumber is no longer unique at DB level
+  const existingMerchant = await prisma.user.findFirst({
     where: { phoneNumber: merchantPhone },
-    update: {
-      passwordHash,
-      role: Role.MERCHANT,
-    },
-    create: {
-      phoneNumber: merchantPhone,
-      passwordHash,
-      role: Role.MERCHANT,
-      currentPoints: 0,
-      pendingPoints: 0,
-      version: 0,
-    },
   });
+
+  let merchant;
+  if (existingMerchant) {
+    merchant = await prisma.user.update({
+      where: { id: existingMerchant.id },
+      data: {
+        passwordHash,
+        role: Role.MERCHANT,
+      },
+    });
+  } else {
+    merchant = await prisma.user.create({
+      data: {
+        phoneNumber: merchantPhone,
+        passwordHash,
+        role: Role.MERCHANT,
+        currentPoints: 0,
+        pendingPoints: 0,
+        version: 0,
+      },
+    });
+  }
 
   console.log(`Merchant pre-seeded successfully:`);
   console.log(`- ID: ${merchant.id}`);

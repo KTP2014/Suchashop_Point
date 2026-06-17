@@ -6,8 +6,17 @@ export class UserRepository {
    * Find a user by phone number
    */
   async findByPhone(phoneNumber: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+    return await prisma.user.findFirst({
       where: { phoneNumber },
+    });
+  }
+
+  /**
+   * Find a user by LINE User ID
+   */
+  async findByLineUserId(lineUserId: string): Promise<User | null> {
+    return await prisma.user.findFirst({
+      where: { lineUserId },
     });
   }
 
@@ -21,7 +30,7 @@ export class UserRepository {
   }
 
   /**
-   * Create a new Customer user
+   * Create a new Customer user via phone/birthdate
    */
   async createCustomer(phoneNumber: string, birthdateHash: string): Promise<User> {
     return await prisma.user.create({
@@ -29,6 +38,21 @@ export class UserRepository {
         phoneNumber,
         role: Role.CUSTOMER,
         birthdateHash,
+        currentPoints: 0,
+        pendingPoints: 0,
+        version: 0,
+      },
+    });
+  }
+
+  /**
+   * Create a new Customer user via LINE Login
+   */
+  async createCustomerWithLine(lineUserId: string): Promise<User> {
+    return await prisma.user.create({
+      data: {
+        lineUserId,
+        role: Role.CUSTOMER,
         currentPoints: 0,
         pendingPoints: 0,
         version: 0,

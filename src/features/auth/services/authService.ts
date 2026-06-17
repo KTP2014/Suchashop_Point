@@ -37,7 +37,7 @@ export class AuthService {
 
     const payload: JWTPayload = {
       userId: user.id,
-      phoneNumber: user.phoneNumber,
+      phoneNumber: user.phoneNumber ?? "",
       role: Role.CUSTOMER,
     };
 
@@ -66,7 +66,7 @@ export class AuthService {
 
     const payload: JWTPayload = {
       userId: user.id,
-      phoneNumber: user.phoneNumber,
+      phoneNumber: user.phoneNumber ?? "",
       role: Role.MERCHANT,
     };
 

@@ -9,6 +9,7 @@ import {
   CheckCircle2, RefreshCw, Smartphone, TrendingUp, Gift, Send,
   QrCode, Copy, Check
 } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 
 interface ProfileData {
   currentPoints: number;
@@ -18,8 +19,10 @@ interface ProfileData {
 
 export default function CustomerDashboard() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncingSession, setSyncingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
@@ -66,13 +69,40 @@ export default function CustomerDashboard() {
   };
 
   useEffect(() => {
-    fetchProfile();
+    const syncSessionAndFetch = async () => {
+      if (status === "loading") return;
+
+      if (status === "unauthenticated") {
+        // Fallback/standard cookie session check
+        setSyncingSession(false);
+        await fetchProfile();
+        return;
+      }
+
+      if (status === "authenticated") {
+        try {
+          const syncRes = await fetch("/api/auth/session-sync", { method: "POST" });
+          if (!syncRes.ok) {
+            throw new Error("LINE session synchronization failed.");
+          }
+        } catch (e: any) {
+          console.error(e);
+          setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซสชัน LINE กรุณาลองใหม่อีกครั้ง");
+        } finally {
+          setSyncingSession(false);
+          await fetchProfile();
+        }
+      }
+    };
+
+    syncSessionAndFetch();
+
     return () => {
       if (qrScannerRef.current && qrScannerRef.current.isScanning) {
         qrScannerRef.current.stop().catch(console.error);
       }
     };
-  }, []);
+  }, [status]);
 
   // Countdown timer for Customer Redemption Coupon QR
   useEffect(() => {
@@ -89,7 +119,7 @@ export default function CustomerDashboard() {
 
   const handleLogout = async () => {
     document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-    router.push("/");
+    await signOut({ callbackUrl: "/" });
   };
 
   const handleGenerateRedeemQR = async () => {
@@ -245,11 +275,11 @@ export default function CustomerDashboard() {
     }
   };
 
-  if (loading && !profile) {
+  if (syncingSession || (loading && !profile)) {
     return (
-      <div className="min-h-screen bg-[#090a0f] text-slate-100 flex flex-col items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
-        <p className="text-sm text-slate-400">Syncing point balances...</p>
+      <div className="min-h-screen bg-[#FFF5F6] flex flex-col items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 text-[#FF7DA0] animate-spin mb-3" />
+        <p className="text-sm text-slate-500 font-semibold">กำลังยืนยันตัวตนกับ LINE...</p>
       </div>
     );
   }
@@ -259,23 +289,23 @@ export default function CustomerDashboard() {
   const progressPercent = (currentPoints / 5) * 100;
 
   return (
-    <main className="min-h-screen bg-[#090a0f] text-slate-100 p-6 relative overflow-hidden font-sans">
-      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-indigo-950/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-violet-950/10 blur-[120px] pointer-events-none" />
+    <main className="min-h-screen bg-[#FFF5F6] text-[#4A3E3F] p-6 relative overflow-hidden font-sans select-none">
+      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-[#FFE2E6]/50 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-[#FFE2E6]/50 blur-[120px] pointer-events-none" />
 
       <div className="max-w-md mx-auto relative z-10 space-y-6">
         
         {/* Navigation Bar */}
-        <div className="flex items-center justify-between bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-4 rounded-2xl">
+        <div className="flex items-center justify-between bg-[#FFFFFF] border border-pink-100/50 p-4 rounded-2xl shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-[#FF7DA0] rounded-lg flex items-center justify-center">
               <Award className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-sm tracking-tight text-slate-200">Customer Portal</span>
+            <span className="font-bold text-sm tracking-tight text-[#5C5556]">Customer Portal</span>
           </div>
           <button
             onClick={handleLogout}
-            className="p-2 text-slate-400 hover:text-slate-200 bg-slate-950/40 border border-slate-800/60 rounded-xl transition-all cursor-pointer"
+            className="p-2 text-slate-450 hover:text-[#FF7DA0] bg-[#F9F9F9] border border-pink-100/30 rounded-xl transition-all cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -283,12 +313,12 @@ export default function CustomerDashboard() {
 
         {/* Global Feedback Banners */}
         {(successMsg || scanResultMsg) && (
-          <div className="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl flex items-start gap-3 text-emerald-300 text-sm animate-fade-in relative">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-start gap-3 text-xs animate-fade-in relative shadow-sm">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
             <span>{successMsg || scanResultMsg}</span>
             <button 
               onClick={() => { setSuccessMsg(null); setScanResultMsg(null); }}
-              className="absolute top-2 right-2 text-emerald-400 hover:text-emerald-200 text-xs cursor-pointer"
+              className="absolute top-2 right-2 text-emerald-450 hover:text-emerald-600 text-xs cursor-pointer"
             >
               ✕
             </button>
@@ -296,12 +326,12 @@ export default function CustomerDashboard() {
         )}
 
         {error && (
-          <div className="p-4 bg-red-950/30 border border-red-500/30 rounded-2xl flex items-start gap-3 text-red-300 text-sm animate-shake relative">
-            <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-2xl flex items-start gap-3 text-xs animate-shake relative shadow-sm">
+            <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
             <button 
               onClick={() => setError(null)}
-              className="absolute top-2 right-2 text-red-400 hover:text-red-200 text-xs cursor-pointer"
+              className="absolute top-2 right-2 text-red-450 hover:text-red-600 text-xs cursor-pointer"
             >
               ✕
             </button>
@@ -310,41 +340,41 @@ export default function CustomerDashboard() {
 
         {/* Redemption Coupon QR Card (Displays when active) */}
         {redeemQrUrl && activeRedeemToken ? (
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-6 rounded-3xl shadow-2xl flex flex-col items-center justify-center space-y-4 animate-fade-in">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 self-start">
-              <Gift className="w-4 h-4 text-emerald-400 animate-bounce" />
+          <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center space-y-4 animate-fade-in">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#5C5556] flex items-center gap-1.5 self-start">
+              <Gift className="w-4 h-4 text-[#FF7DA0] animate-bounce" />
               Reward Redemption Coupon
             </h3>
             
-            <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl shadow-inner">
+            <div className="p-3 bg-[#F9F9F9] border border-pink-100/30 rounded-2xl shadow-inner">
               <img src={redeemQrUrl} alt="Active redemption coupon QR Code" className="w-52 h-52 rounded-xl" />
             </div>
 
             <div className="text-center">
-              <p className="text-[10px] text-slate-500">Show this QR to the Merchant. Coupon expires in:</p>
-              <p className="text-md font-bold text-amber-400 mt-0.5">
+              <p className="text-[10px] text-slate-400">Show this QR to the Merchant. Coupon expires in:</p>
+              <p className="text-md font-bold text-[#FF7DA0] mt-0.5">
                 {Math.floor(redeemTtl / 60)}:{(redeemTtl % 60).toString().padStart(2, "0")}
               </p>
             </div>
 
             {/* Developer testing copier */}
-            <div className="w-full bg-slate-950/60 border border-slate-800/80 p-2.5 rounded-xl space-y-1.5 text-[10px] text-left">
-              <span className="text-slate-500 block font-bold uppercase tracking-wider">Coupon Token (Camera-less Test)</span>
+            <div className="w-full bg-[#F9F9F9] border border-pink-100/30 p-2.5 rounded-xl space-y-1.5 text-[10px] text-left">
+              <span className="text-slate-450 block font-bold uppercase tracking-wider">Coupon Token (Camera-less Test)</span>
               <div className="flex gap-2">
                 <input
                   type="text"
                   readOnly
                   value={activeRedeemToken}
-                  className="flex-1 bg-transparent border-none text-slate-300 font-mono focus:outline-none truncate text-[9px]"
+                  className="flex-1 bg-transparent border-none text-[#5C5556] font-mono focus:outline-none truncate text-[9px]"
                 />
                 <button
                   onClick={copyRedeemTokenToClipboard}
-                  className="p-1 bg-slate-900 border border-slate-800 hover:text-white rounded text-slate-400 flex items-center gap-1 transition-all cursor-pointer"
+                  className="p-1 bg-[#FFFFFF] border border-pink-100/30 hover:text-[#FF7DA0] rounded text-slate-400 flex items-center gap-1 transition-all cursor-pointer"
                 >
                   {copiedRedeem ? (
                     <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">Copied</span>
+                      <Check className="w-3 h-3 text-emerald-500" />
+                      <span className="text-emerald-500">Copied</span>
                     </>
                   ) : (
                     <>
@@ -361,21 +391,21 @@ export default function CustomerDashboard() {
                 setActiveRedeemToken(null);
                 setRedeemQrUrl(null);
               }}
-              className="w-full py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition-all"
+              className="w-full py-2 bg-[#F9F9F9] border border-pink-100/30 hover:bg-[#FFE2E6]/30 text-slate-500 hover:text-[#5C5556] rounded-xl text-xs font-semibold cursor-pointer transition-all"
             >
               Close / Cancel Coupon
             </button>
           </div>
         ) : (
           /* Main Point circular progress card */
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-8 rounded-3xl shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="bg-[#FFFFFF] border border-pink-100/50 p-8 rounded-3xl shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
             
-            <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 bg-slate-950/60 border border-slate-800/60 rounded-xl text-xs text-slate-400 hover:text-slate-200 cursor-pointer" onClick={fetchProfile}>
+            <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 bg-[#F9F9F9] border border-pink-100/30 rounded-xl text-xs text-slate-450 hover:text-[#5C5556] cursor-pointer" onClick={fetchProfile}>
               <RefreshCw className="w-3.5 h-3.5" />
               Sync
             </div>
 
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#5C5556] mb-6">
               Active Points
             </h2>
 
@@ -385,14 +415,14 @@ export default function CustomerDashboard() {
                   cx="88"
                   cy="88"
                   r="74"
-                  className="stroke-slate-950/60 fill-none"
+                  className="stroke-[#F9F9F9] fill-none"
                   strokeWidth="12"
                 />
                 <circle
                   cx="88"
                   cy="88"
                   r="74"
-                  className="stroke-indigo-500 fill-none transition-all duration-700 ease-out"
+                  className="stroke-[#FF7DA0] fill-none transition-all duration-700 ease-out"
                   strokeWidth="12"
                   strokeDasharray={464}
                   strokeDashoffset={464 - (464 * progressPercent) / 100}
@@ -400,31 +430,31 @@ export default function CustomerDashboard() {
                 />
               </svg>
               <div className="absolute flex flex-col items-center">
-                <span className="text-5xl font-extrabold text-white tracking-tight">
+                <span className="text-5xl font-extrabold text-[#5C5556] tracking-tight">
                   {currentPoints}
                 </span>
-                <span className="text-xs text-slate-500 mt-1 font-semibold">
+                <span className="text-xs text-slate-400 mt-1 font-semibold">
                   out of 5
                 </span>
               </div>
             </div>
 
-            <div className="w-full grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-slate-800/60">
-              <div className="flex flex-col items-center border-r border-slate-800/60">
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="w-full grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-pink-100/30">
+              <div className="flex flex-col items-center border-r border-pink-100/30">
+                <span className="text-xs text-slate-450 flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-[#FF7DA0]" />
                   Overflow
                 </span>
-                <span className="text-lg font-bold text-slate-100 mt-1">
+                <span className="text-lg font-bold text-[#5C5556] mt-1">
                   {pendingPoints} pts
                 </span>
               </div>
               <div className="flex flex-col items-center">
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <Smartphone className="w-3.5 h-3.5 text-violet-400" />
+                <span className="text-xs text-slate-455 flex items-center gap-1">
+                  <Smartphone className="w-3.5 h-3.5 text-[#FF7DA0]" />
                   Total Saved
                 </span>
-                <span className="text-lg font-bold text-slate-100 mt-1">
+                <span className="text-lg font-bold text-[#5C5556] mt-1">
                   {profile?.totalPoints ?? 0} pts
                 </span>
               </div>
@@ -437,7 +467,7 @@ export default function CustomerDashboard() {
           <button
             onClick={handleGenerateRedeemQR}
             disabled={generatingRedeem}
-            className="w-full py-4.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98] hover:shadow-emerald-600/40"
+            className="w-full py-4 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98]"
           >
             {generatingRedeem ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -453,22 +483,22 @@ export default function CustomerDashboard() {
         {/* Camera scanning visual interface toggle */}
         {!redeemQrUrl && (
           scanning ? (
-            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-6 rounded-3xl shadow-2xl space-y-4 animate-fade-in">
+            <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm space-y-4 animate-fade-in">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-300">Align QR Code inside Box</span>
+                <span className="text-sm font-semibold text-[#5C5556]">Align QR Code inside Box</span>
                 <button
                   onClick={stopScanner}
-                  className="p-1.5 text-slate-400 hover:text-slate-200 bg-slate-950/60 border border-slate-800/60 rounded-lg cursor-pointer"
+                  className="p-1.5 text-slate-400 hover:text-[#FF7DA0] bg-[#F9F9F9] border border-pink-100/30 rounded-lg cursor-pointer"
                 >
                   <XCircle className="w-4 h-4" />
                 </button>
               </div>
-              <div id="reader-container" className="w-full aspect-square overflow-hidden rounded-2xl border border-slate-800 bg-black" />
+              <div id="reader-container" className="w-full aspect-square overflow-hidden rounded-2xl border border-pink-100/30 bg-[#F9F9F9]" />
             </div>
           ) : (
             <button
               onClick={startScanner}
-              className="w-full py-4.5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.98] hover:shadow-indigo-600/40"
+              className="w-full py-4 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.98]"
             >
               <Camera className="w-5 h-5" />
               Scan Merchant QR
@@ -478,8 +508,8 @@ export default function CustomerDashboard() {
 
         {/* TEXT INPUT FALLBACK */}
         {!redeemQrUrl && (
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-5 rounded-2xl space-y-3">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+          <div className="bg-[#FFFFFF] border border-pink-100/50 p-5 rounded-2xl space-y-3 shadow-sm">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C5556] block">
               Camera-less Testing Tool (Manually Claim Points)
             </label>
             <form onSubmit={handleManualSubmit} className="flex gap-2">
@@ -488,12 +518,12 @@ export default function CustomerDashboard() {
                 placeholder="Paste 64-char Hex Earn Token here..."
                 value={manualToken}
                 onChange={(e) => setManualToken(e.target.value)}
-                className="flex-1 px-3 py-2 bg-slate-950/40 border border-slate-800/80 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-650 text-xs transition-all"
+                className="flex-1 px-3 py-2 bg-[#F9F9F9] border border-pink-100/30 rounded-xl focus:outline-none focus:border-[#FF7DA0] text-[#5C5556] placeholder-slate-400 text-xs transition-all"
               />
               <button
                 type="submit"
                 disabled={claimingManual || !manualToken.trim()}
-                className="px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-default flex items-center justify-center transition-all"
+                className="px-3.5 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-default flex items-center justify-center transition-all"
               >
                 {claimingManual ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -502,7 +532,7 @@ export default function CustomerDashboard() {
                 )}
               </button>
             </form>
-            <p className="text-[9px] text-slate-600 leading-normal pl-0.5">
+            <p className="text-[9px] text-slate-400 leading-normal pl-0.5">
               Copy the 64-character token displayed under the QR code on the Merchant Dashboard and paste it here to simulate a scan.
             </p>
           </div>

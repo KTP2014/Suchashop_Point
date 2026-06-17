@@ -7,7 +7,7 @@ const getSecretBytes = (): Uint8Array => {
 
 export interface JWTPayload {
   userId: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   role: "CUSTOMER" | "MERCHANT";
 }
 

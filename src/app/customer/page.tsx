@@ -118,8 +118,8 @@ export default function CustomerDashboard() {
         width: 300,
         margin: 2,
         color: {
-          dark: "#ffffff",
-          light: "#020617",
+          dark: "#3D3839", // Standard dark charcoal foreground
+          light: "#FFFFFF", // Standard high-contrast white background
         },
       });
 
@@ -144,33 +144,47 @@ export default function CustomerDashboard() {
     setScanResultMsg(null);
     setError(null);
 
-    setTimeout(() => {
-      const html5QrCode = new Html5Qrcode("reader-container");
-      qrScannerRef.current = html5QrCode;
-
-      html5QrCode.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        async (decodedText) => {
-          let targetToken = decodedText;
-          try {
-            const parsed = JSON.parse(decodedText);
-            if (parsed.token) targetToken = parsed.token;
-          } catch (e) {
-            // Raw text fallback
+    setTimeout(async () => {
+      try {
+        if (qrScannerRef.current) {
+          if (qrScannerRef.current.isScanning) {
+            await qrScannerRef.current.stop();
           }
-          await stopScanner();
-          await processScannedToken(targetToken);
-        },
-        () => {}
-      ).catch((err) => {
-        setError("Camera permission denied or camera not found.");
+          qrScannerRef.current = null;
+        }
+
+        const html5QrCode = new Html5Qrcode("reader-container");
+        qrScannerRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: (width, height) => {
+              const minEdge = Math.min(width, height);
+              const size = Math.floor(minEdge * 0.7);
+              return { width: size, height: size };
+            },
+          },
+          async (decodedText) => {
+            let targetToken = decodedText;
+            try {
+              const parsed = JSON.parse(decodedText);
+              if (parsed.token) targetToken = parsed.token;
+            } catch (e) {
+              // Raw text fallback
+            }
+            await stopScanner();
+            await processScannedToken(targetToken);
+          },
+          () => {}
+        );
+      } catch (err: any) {
+        console.error("Scanner failed to start:", err);
+        setError("กล้องมีปัญหา หรือกำลังใช้งานโดยแอปพลิเคชันอื่นอยู่");
         setScanning(false);
-      });
-    }, 100);
+      }
+    }, 150);
   };
 
   const stopScanner = async () => {

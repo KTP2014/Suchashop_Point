@@ -225,7 +225,7 @@ export default function LoginPage() {
                     type="text"
                     required
                     maxLength={8}
-                    placeholder="ตัวอย่าง 28021998"
+                    placeholder="ตัวอย่าง 28022545"
                     value={birthdate}
                     onChange={(e) => setBirthdate(e.target.value)}
                     className="w-full pl-11 pr-4 py-2.5 bg-[#F9F9F9] border border-pink-100 rounded-2xl focus:outline-none focus:border-[#FF7DA0] text-[#5C5556] placeholder-slate-400 text-xs transition-all focus:ring-2 focus:ring-[#FF7DA0]/10"

@@ -8,8 +8,9 @@ const userRepository = new UserRepository();
 export const authOptions: NextAuthOptions = {
   providers: [
     LineProvider({
-      clientId: process.env.LINE_CLIENT_ID || "placeholder_id",
-      clientSecret: process.env.LINE_CLIENT_SECRET || "placeholder_secret",
+      // ✅ ลบ "placeholder_id" และ "placeholder_secret" ออกทั้งหมดเรียบร้อย
+      clientId: process.env.LINE_CLIENT_ID!,
+      clientSecret: process.env.LINE_CLIENT_SECRET!,
     }),
   ],
   callbacks: {

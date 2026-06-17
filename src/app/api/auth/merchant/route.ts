@@ -8,7 +8,7 @@ import { z } from "zod";
 
 const MerchantLoginSchema = z.object({
   phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Phone number must match E.164 format."),
-  password: z.string().min(8, "Password must be at least 8 characters long."),
+  password: z.string().min(4, "Password must be at least 4 characters long."),
 }).strict();
 
 const authService = new AuthService();

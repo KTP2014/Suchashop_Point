@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Loader2, Phone, Calendar, Lock, UserCheck, ShieldAlert } from "lucide-react";
-import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,10 +11,60 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // LIFF States
+  const [liffInstance, setLiffInstance] = useState<any>(null);
+  const [liffLoading, setLiffLoading] = useState(true);
+
   // Form State
   const [phoneNumber, setPhoneNumber] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    const initLiff = async () => {
+      try {
+        const liff = (await import("@line/liff")).default;
+        const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+        if (!liffId) {
+          console.error("LIFF ID is missing in environment variables.");
+          setLiffLoading(false);
+          return;
+        }
+        await liff.init({ liffId });
+        setLiffInstance(liff);
+        setLiffLoading(false);
+
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          const lineUserId = profile.userId;
+
+          // Call liff-login endpoint to set session cookie
+          const res = await fetch("/api/auth/liff-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lineUserId }),
+          });
+
+          if (res.ok) {
+            router.push("/customer");
+          }
+        }
+      } catch (err) {
+        console.error("LIFF initialization failed", err);
+        setLiffLoading(false);
+      }
+    };
+    initLiff();
+  }, [router]);
+
+  const handleLiffLogin = () => {
+    if (!liffInstance) return;
+    if (!liffInstance.isLoggedIn()) {
+      liffInstance.login();
+    } else {
+      router.push("/customer");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,8 +247,9 @@ export default function LoginPage() {
             <div className="space-y-3 mb-2 mt-4">
               <button
                 type="button"
-                onClick={() => signIn("line", { callbackUrl: "/customer" })}
-                className="w-full py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.96] tracking-wide text-xs"
+                onClick={handleLiffLogin}
+                disabled={liffLoading}
+                className="w-full py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.96] tracking-wide text-xs disabled:opacity-50"
               >
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                   <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.586.39.084.922.258 1.057.592.12.3.077.769.038 1.073-.038.307-.184 1.23-.231 1.633-.072.631-.322 2.472 1.393 1.348 1.716-1.125 9.277-5.462 12.633-9.351 2.378-2.658 3.074-4.887 3.074-7.281zm-15.61 3.567h-2.113c-.29 0-.527-.236-.527-.528v-4.116c0-.291.237-.528.527-.528h2.113c.291 0 .528.237.528.528 0 .292-.237.528-.528.528h-1.585v1.268h1.585c.291 0 .528.237.528.528s-.237.528-.528.528h-1.585v1.268h1.585c.291 0 .528.237.528.528.001.292-.236.528-.528.528zm3.626 0c0 .292-.236.528-.527.528s-.528-.236-.528-.528v-4.116c0-.291.237-.528.528-.528s.527.237.527.528v4.116zm4.417 0h-2.112c-.29 0-.528-.236-.528-.528v-4.116c0-.291.238-.528.528-.528s.528.237.528.528v3.061l1.584-3.061c.102-.197.306-.322.528-.322.428 0 .668.468.455.84l-1.442 2.784.008.016 1.433.003c.29 0 .527.237.527.528 0 .292-.237.528-.527.528v-.003zm3.627 0h-2.112c-.29 0-.528-.236-.528-.528v-4.116c0-.291.238-.528.528-.528h2.112c.29 0 .528.237.528.528s-.238.528-.528.528h-1.584v.74h1.584c.29 0 .528.237.528.528s-.238.528-.528.528h-1.584v.739h1.584c.29 0 .528.237.528.528s-.238.528-.528.528z" />

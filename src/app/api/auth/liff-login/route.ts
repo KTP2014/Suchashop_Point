@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../[...nextauth]/route";
 import { UserRepository } from "../../../../features/auth/repository/userRepository";
 import { signToken, JWTPayload } from "../../../../features/auth/services/jwt";
 import { cookies } from "next/headers";
@@ -8,25 +6,23 @@ import { Role } from "@prisma/client";
 
 const userRepository = new UserRepository();
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || !(session as any).userId) {
+    const { lineUserId } = await request.json();
+
+    if (!lineUserId) {
       return NextResponse.json({ 
         success: false, 
-        message: "No active NextAuth session found." 
-      }, { status: 401 });
+        message: "Missing LINE User ID." 
+      }, { status: 400 });
     }
 
-    const userId = (session as any).userId;
-    const user = await userRepository.findById(userId);
+    // Check if customer already exists in MongoDB
+    let user = await userRepository.findByLineUserId(lineUserId);
 
     if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "User not found in database." 
-      }, { status: 404 });
+      // Auto-Register new LINE user
+      user = await userRepository.createCustomerWithLine(lineUserId);
     }
 
     const payload: JWTPayload = {
@@ -59,10 +55,10 @@ export async function POST() {
       } 
     });
   } catch (error: any) {
-    console.error("Session sync failed:", error);
+    console.error("LIFF login failed:", error);
     return NextResponse.json({ 
       success: false, 
-      message: error.message || "Failed to sync session." 
+      message: error.message || "Failed to process LIFF login." 
     }, { status: 500 });
   }
 }

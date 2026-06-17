@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { Html5Qrcode } from "html5-qrcode";
 import { 
   Award, Loader2, Sparkles, LogOut, Camera, XCircle, 
   CheckCircle2, RefreshCw, Smartphone, TrendingUp, Gift, Send,
   QrCode, Copy, Check
 } from "lucide-react";
-import { useSession, signOut } from "next-auth/react";
 
 interface ProfileData {
   currentPoints: number;
@@ -19,13 +17,15 @@ interface ProfileData {
 
 export default function CustomerDashboard() {
   const router = useRouter();
-  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncingSession, setSyncingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
+  // LIFF State
+  const [liffInstance, setLiffInstance] = useState<any>(null);
+
   // Manual Input State (For Camera-less testing)
   const [manualToken, setManualToken] = useState("");
   const [claimingManual, setClaimingManual] = useState(false);
@@ -40,8 +40,6 @@ export default function CustomerDashboard() {
   // Scanning UI triggers
   const [scanning, setScanning] = useState(false);
   const [scanResultMsg, setScanResultMsg] = useState<string | null>(null);
-
-  const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
   const fetchProfile = async () => {
     try {
@@ -69,40 +67,33 @@ export default function CustomerDashboard() {
   };
 
   useEffect(() => {
-    const syncSessionAndFetch = async () => {
-      if (status === "loading") return;
+    const initLiff = async () => {
+      try {
+        const liff = (await import("@line/liff")).default;
+        const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+        if (!liffId) {
+          console.error("LIFF ID is missing in environment variables.");
+          setSyncingSession(false);
+          return;
+        }
+        await liff.init({ liffId });
+        setLiffInstance(liff);
 
-      if (status === "unauthenticated") {
-        // Fallback/standard cookie session check
+        if (!liff.isLoggedIn()) {
+          router.push("/");
+          return;
+        }
+
         setSyncingSession(false);
         await fetchProfile();
-        return;
-      }
-
-      if (status === "authenticated") {
-        try {
-          const syncRes = await fetch("/api/auth/session-sync", { method: "POST" });
-          if (!syncRes.ok) {
-            throw new Error("LINE session synchronization failed.");
-          }
-        } catch (e: any) {
-          console.error(e);
-          setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซสชัน LINE กรุณาลองใหม่อีกครั้ง");
-        } finally {
-          setSyncingSession(false);
-          await fetchProfile();
-        }
+      } catch (err) {
+        console.error("LIFF initialization failed on customer dashboard", err);
+        setError("เกิดข้อผิดพลาดในการเชื่อมต่อ LINE LIFF");
+        setSyncingSession(false);
       }
     };
-
-    syncSessionAndFetch();
-
-    return () => {
-      if (qrScannerRef.current && qrScannerRef.current.isScanning) {
-        qrScannerRef.current.stop().catch(console.error);
-      }
-    };
-  }, [status]);
+    initLiff();
+  }, [router]);
 
   // Countdown timer for Customer Redemption Coupon QR
   useEffect(() => {
@@ -119,7 +110,10 @@ export default function CustomerDashboard() {
 
   const handleLogout = async () => {
     document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-    await signOut({ callbackUrl: "/" });
+    if (liffInstance) {
+      liffInstance.logout();
+    }
+    router.push("/");
   };
 
   const handleGenerateRedeemQR = async () => {
@@ -170,72 +164,42 @@ export default function CustomerDashboard() {
   };
 
   const startScanner = async () => {
-    setScanning(true);
-    setScanResultMsg(null);
-    setError(null);
+    if (!liffInstance) {
+      setError("ระบบสแกน LINE ยังไม่พร้อมใช้งาน");
+      return;
+    }
 
-    setTimeout(async () => {
-      try {
-        if (qrScannerRef.current) {
-          if (qrScannerRef.current.isScanning) {
-            await qrScannerRef.current.stop();
-          }
-          qrScannerRef.current = null;
+    try {
+      setScanning(true);
+      setError(null);
+      setScanResultMsg(null);
+      setSuccessMsg(null);
+
+      const result = await liffInstance.scanCodeV2();
+      const decodedText = result.value;
+
+      if (decodedText) {
+        // High priority alert to determine if decoding succeeded before API submission
+        alert("สแกนติดแล้ว! (QR Code Detected):\n" + decodedText);
+
+        let targetToken = decodedText;
+        try {
+          const parsed = JSON.parse(decodedText);
+          if (parsed.token) targetToken = parsed.token;
+        } catch (e) {
+          // Raw text fallback
         }
-
-        const html5QrCode = new Html5Qrcode("reader-container");
-        qrScannerRef.current = html5QrCode;
-
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          {
-            fps: 15, // Smooth 15 frames per second for mobile CPU efficiency
-            qrbox: (width, height) => {
-              const minEdge = Math.min(width, height);
-              const size = Math.floor(minEdge * 0.75);
-              return { width: size, height: size };
-            },
-          },
-          async (decodedText) => {
-            // Debug logs
-            console.log("QR Detected:", decodedText);
-
-            // Vibrate device if API is supported (Android Chrome / compatible webview)
-            if (typeof navigator !== "undefined" && navigator.vibrate) {
-              navigator.vibrate(200);
-            }
-
-            // High priority alert to determine if decoding succeeded before API submission
-            alert("สแกนติดแล้ว! (QR Code Detected):\n" + decodedText);
-
-            let targetToken = decodedText;
-            try {
-              const parsed = JSON.parse(decodedText);
-              if (parsed.token) targetToken = parsed.token;
-            } catch (e) {
-              // Raw text fallback
-            }
-            await stopScanner();
-            await processScannedToken(targetToken);
-          },
-          () => {}
-        );
-      } catch (err: any) {
-        console.error("Scanner failed to start:", err);
-        setError("กล้องมีปัญหา หรือกำลังใช้งานโดยแอปพลิเคชันอื่นอยู่");
-        setScanning(false);
+        await processScannedToken(targetToken);
       }
-    }, 150);
+    } catch (err: any) {
+      console.error("LIFF scanning failed:", err);
+      setError("การสแกนโค้ดด้วย LINE ล้มเหลว หรือสิทธิ์กล้องถูกปฏิเสธ");
+    } finally {
+      setScanning(false);
+    }
   };
 
   const stopScanner = async () => {
-    if (qrScannerRef.current && qrScannerRef.current.isScanning) {
-      try {
-        await qrScannerRef.current.stop();
-      } catch (err) {
-        console.error(err);
-      }
-    }
     setScanning(false);
   };
 
@@ -480,30 +444,20 @@ export default function CustomerDashboard() {
           </button>
         )}
 
-        {/* Camera scanning visual interface toggle */}
+        {/* LINE Native QR Scan Button */}
         {!redeemQrUrl && (
-          scanning ? (
-            <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm space-y-4 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#5C5556]">Align QR Code inside Box</span>
-                <button
-                  onClick={stopScanner}
-                  className="p-1.5 text-slate-400 hover:text-[#FF7DA0] bg-[#F9F9F9] border border-pink-100/30 rounded-lg cursor-pointer"
-                >
-                  <XCircle className="w-4 h-4" />
-                </button>
-              </div>
-              <div id="reader-container" className="w-full aspect-square overflow-hidden rounded-2xl border border-pink-100/30 bg-[#F9F9F9]" />
-            </div>
-          ) : (
-            <button
-              onClick={startScanner}
-              className="w-full py-4 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.98]"
-            >
+          <button
+            onClick={startScanner}
+            disabled={scanning}
+            className="w-full py-4 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.98] disabled:opacity-50"
+          >
+            {scanning ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
               <Camera className="w-5 h-5" />
-              Scan Merchant QR
-            </button>
-          )
+            )}
+            {scanning ? "กำลังเปิดกล้อง LINE..." : "Scan Merchant QR"}
+          </button>
         )}
 
         {/* TEXT INPUT FALLBACK */}

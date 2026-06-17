@@ -14,6 +14,20 @@ export const authOptions: NextAuthOptions = {
       authorization: { params: { scope: "profile openid" } },
     }),
   ],
+  useSecureCookies: process.env.NODE_ENV === "production",
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" ? `__Secure-next-auth.session-token` : `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
+  // @ts-expect-error - trustHost parameter for Vercel proxy headers
+  trustHost: true,
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider === "line") {

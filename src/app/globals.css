@@ -95,3 +95,11 @@ body {
 .animate-shake {
   animation: shake 0.3s ease-in-out;
 }
+
+/* Prevent html5-qrcode video stretching and aspect-ratio distortion */
+#reader-container video,
+#redeem-reader video {
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+}

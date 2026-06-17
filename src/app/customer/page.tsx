@@ -159,14 +159,25 @@ export default function CustomerDashboard() {
         await html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 10,
+            fps: 15, // Smooth 15 frames per second for mobile CPU efficiency
             qrbox: (width, height) => {
               const minEdge = Math.min(width, height);
-              const size = Math.floor(minEdge * 0.7);
+              const size = Math.floor(minEdge * 0.75);
               return { width: size, height: size };
             },
           },
           async (decodedText) => {
+            // Debug logs
+            console.log("QR Detected:", decodedText);
+
+            // Vibrate device if API is supported (Android Chrome / compatible webview)
+            if (typeof navigator !== "undefined" && navigator.vibrate) {
+              navigator.vibrate(200);
+            }
+
+            // High priority alert to determine if decoding succeeded before API submission
+            alert("สแกนติดแล้ว! (QR Code Detected):\n" + decodedText);
+
             let targetToken = decodedText;
             try {
               const parsed = JSON.parse(decodedText);

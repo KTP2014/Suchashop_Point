@@ -36,19 +36,24 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
     async jwt({ token, account, profile }) {
-      // If logging in via line, fetch the MongoDB user and append their data to the JWT
+      // If logging in via line, preserve the lineUserId on the JWT token
       if (account?.provider === "line") {
         const lineUserId = profile?.sub || account.providerAccountId;
         if (lineUserId) {
-          try {
-            const mongoUser = await userRepository.findByLineUserId(lineUserId);
-            if (mongoUser) {
-              token.userId = mongoUser.id;
-              token.phoneNumber = mongoUser.phoneNumber || "";
-            }
-          } catch (error) {
-            console.error("Error looking up user in JWT callback:", error);
+          token.lineUserId = lineUserId;
+        }
+      }
+
+      // If we have the lineUserId but not yet resolved the MongoDB user details (e.g. on session checks)
+      if (token.lineUserId && !token.userId) {
+        try {
+          const mongoUser = await userRepository.findByLineUserId(token.lineUserId as string);
+          if (mongoUser) {
+            token.userId = mongoUser.id;
+            token.phoneNumber = mongoUser.phoneNumber || "";
           }
+        } catch (error) {
+          console.error("Error looking up user in JWT callback:", error);
         }
       }
       return token;
@@ -64,7 +69,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/",
-    error: "/",
   },
   secret: process.env.NEXTAUTH_SECRET,
 };

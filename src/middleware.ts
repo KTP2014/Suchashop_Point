@@ -22,9 +22,22 @@ export async function middleware(request: NextRequest) {
 
   if (isCustomerRoute || isMerchantRoute) {
     const token = request.cookies.get("session")?.value;
+    const isApiRequest = pathname.startsWith("/api/");
+
+    // For frontend pages, we allow NextAuth session token as a fallback
+    // so the page can load and trigger the session-sync API.
+    const nextAuthToken = !isApiRequest
+      ? (request.cookies.get("next-auth.session-token")?.value ||
+         request.cookies.get("__Secure-next-auth.session-token")?.value)
+      : undefined;
+
+    if (!token && !nextAuthToken) {
+      return handleUnauthorized(request, "Missing authentication token.");
+    }
 
     if (!token) {
-      return handleUnauthorized(request, "Missing authentication token.");
+      // Bypassing middleware check for frontend pages when NextAuth session exists
+      return NextResponse.next();
     }
 
     try {

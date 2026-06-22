@@ -4,7 +4,7 @@ import { Transaction, TransactionType } from "@prisma/client";
 export interface HistoryFilter {
   page: number;
   limit: number;
-  searchPhone?: string;
+  searchName?: string;
   actionType?: TransactionType;
   sortBy?: "createdAt";
   sortOrder?: "asc" | "desc";
@@ -45,21 +45,24 @@ export class TransactionRepository {
 
   /**
    * Find paginated, sorted, and filtered transaction history for a specific merchant operator.
+   * If operatorId is null or undefined, returns history across all operators.
    */
   async findMerchantHistory(
-    operatorId: string,
+    operatorId: string | null | undefined,
     filter: HistoryFilter
   ): Promise<{ transactions: any[]; total: number }> {
-    const { page, limit, searchPhone, actionType, sortBy = "createdAt", sortOrder = "desc" } = filter;
+    const { page, limit, searchName, actionType, sortBy = "createdAt", sortOrder = "desc" } = filter;
     const skip = (page - 1) * limit;
 
-    // Direct single-collection indexed lookup matching merchant operators
     const where: any = {
-      operatorId,
+      ...(operatorId && { operatorId }),
       ...(actionType && { type: actionType }),
-      ...(searchPhone && {
-        customerPhoneNumber: {
-          startsWith: searchPhone,
+      ...(searchName && {
+        customer: {
+          displayName: {
+            contains: searchName,
+            mode: "insensitive",
+          },
         },
       }),
     };

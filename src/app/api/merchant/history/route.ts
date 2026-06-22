@@ -10,7 +10,7 @@ const transactionRepository = new TransactionRepository();
 const QuerySchema = z.object({
   page: z.string().optional().transform(v => v ? parseInt(v, 10) : 1),
   limit: z.string().optional().transform(v => v ? parseInt(v, 10) : 10),
-  searchPhone: z.string().optional(),
+  searchName: z.string().optional(),
   actionType: z.enum(["EARN", "REDEEM", "RESET", "ADJUSTMENT"]).optional(),
   sortBy: z.enum(["createdAt"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
@@ -19,6 +19,7 @@ const QuerySchema = z.object({
 export async function GET(request: Request) {
   try {
     const merchantId = request.headers.get("x-user-id");
+    const userRole = request.headers.get("x-user-role");
 
     if (!merchantId) {
       return NextResponse.json({
@@ -42,13 +43,17 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
-    const { page, limit, searchPhone, actionType, sortBy, sortOrder } = parsed.data;
+    const { page, limit, searchName, actionType, sortBy, sortOrder } = parsed.data;
+
+    // Expand view: if caller is ADMIN or STAFF, show all transactions of the shop.
+    // Otherwise (e.g. MERCHANT role or raw merchantId), show only their own operations.
+    const queryOperatorId = (userRole === "ADMIN" || userRole === "STAFF") ? undefined : merchantId;
 
     // Direct single-collection indexed history retrieve
-    const result = await transactionRepository.findMerchantHistory(merchantId, {
+    const result = await transactionRepository.findMerchantHistory(queryOperatorId, {
       page,
       limit,
-      searchPhone,
+      searchName,
       actionType,
       sortBy,
       sortOrder,

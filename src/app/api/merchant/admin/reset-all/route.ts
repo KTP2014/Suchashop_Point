@@ -12,8 +12,9 @@ export async function POST(request: Request) {
     const adminId = admin.id;
 
     // 1. Fetch all customer points details to calculate changes for ledger
+    const targetRoles = [Role.CUSTOMER, Role.STAFF, Role.ADMIN];
     const customers = await prisma.user.findMany({
-      where: { role: Role.CUSTOMER },
+      where: { role: { in: targetRoles } },
       select: {
         id: true,
         phoneNumber: true,
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
     // 2. Perform bulk reset using updateMany (highly efficient)
     await prisma.user.updateMany({
-      where: { role: Role.CUSTOMER },
+      where: { role: { in: targetRoles } },
       data: {
         currentPoints: 0,
         pendingPoints: 0,

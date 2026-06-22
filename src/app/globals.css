@@ -96,6 +96,36 @@ body {
   animation: shake 0.3s ease-in-out;
 }
 
+/* 5. Cat Stamp Shine/Pop Animation */
+@keyframes paw-pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.18) rotate(-5deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.animate-paw-pop {
+  animation: paw-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes paw-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 125, 160, 0)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 4px 10px rgba(255, 125, 160, 0.55)); }
+}
+
+.animate-paw-active {
+  animation: paw-pulse 3s ease-in-out infinite;
+}
+
+/* 6. Custom Toast Notification Transitions */
+@keyframes toast-slide-in {
+  0% { transform: translateY(1.5rem) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.animate-toast-in {
+  animation: toast-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Prevent html5-qrcode video stretching and aspect-ratio distortion */
 #reader-container video,
 #redeem-reader video {

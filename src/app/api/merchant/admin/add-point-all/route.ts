@@ -32,9 +32,10 @@ export async function POST(request: Request) {
     // Load maximum points limit dynamically from configuration environment variables
     const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
 
-    // 1. Fetch all customer accounts
+    // 1. Fetch all customer, staff, and admin accounts (acting as point collectors)
+    const targetRoles = [Role.CUSTOMER, Role.STAFF, Role.ADMIN];
     const customers = await prisma.user.findMany({
-      where: { role: Role.CUSTOMER },
+      where: { role: { in: targetRoles } },
     });
 
     if (customers.length === 0) {
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
     // Handle any users who might exceed maxPoints due to changes in config
     updatePromises.push(
       prisma.user.updateMany({
-        where: { role: Role.CUSTOMER, currentPoints: { gt: maxPoints } },
+        where: { role: { in: targetRoles }, currentPoints: { gt: maxPoints } },
         data: {
           pendingPoints: { increment: points },
           version: { increment: 1 },
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
       if (overflow > 0) {
         updatePromises.push(
           prisma.user.updateMany({
-            where: { role: Role.CUSTOMER, currentPoints: currentOld },
+            where: { role: { in: targetRoles }, currentPoints: currentOld },
             data: {
               currentPoints: currentNew,
               pendingPoints: { increment: overflow },
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
       } else {
         updatePromises.push(
           prisma.user.updateMany({
-            where: { role: Role.CUSTOMER, currentPoints: currentOld },
+            where: { role: { in: targetRoles }, currentPoints: currentOld },
             data: {
               currentPoints: currentNew,
               version: { increment: 1 },

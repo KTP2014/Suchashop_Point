@@ -37,6 +37,15 @@ export default function CustomerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
+  // Custom Toast State
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
+  const showToast = (msg: string, type: "success" | "error") => {
+    setToast({ message: msg, type });
+    // Keep it readable but auto-dim after 4s
+    const timer = setTimeout(() => setToast({ message: "", type: null }), 4000);
+    return timer;
+  };
+
   // LIFF State
   const [liffInstance, setLiffInstance] = useState<any>(null);
 
@@ -60,6 +69,38 @@ export default function CustomerDashboard() {
   const [secretCode, setSecretCode] = useState("");
   const [applyingStaff, setApplyingStaff] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+
+  // Dynamic automatic redemption checking polling
+  useEffect(() => {
+    if (!activeRedeemToken) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/customer/redeem-status?token=${activeRedeemToken}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.status === "USED") {
+            showToast("🎉 แลกของรางวัลสำเร็จเรียบร้อยแล้ว!", "success");
+            setActiveRedeemToken(null);
+            setRedeemQrUrl(null);
+            setRedeemTtl(0);
+            await fetchProfile();
+          } else if (data.success && data.status === "EXPIRED") {
+            showToast("⚠️ คูปองหมดอายุแล้ว", "error");
+            setActiveRedeemToken(null);
+            setRedeemQrUrl(null);
+            setRedeemTtl(0);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling redemption status:", err);
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [activeRedeemToken]);
 
   const fetchProfile = async () => {
     try {
@@ -211,8 +252,6 @@ export default function CustomerDashboard() {
       const decodedText = result.value;
 
       if (decodedText) {
-        alert("สแกนโค้ดสําเร็จ:\n" + decodedText);
-
         let targetToken = decodedText;
         try {
           const parsed = JSON.parse(decodedText);
@@ -224,13 +263,11 @@ export default function CustomerDashboard() {
       }
     } catch (err: any) {
       console.error("LIFF scanning failed:", err);
-      setError("การสแกนโค้ดล้มเหลว หรือไม่ได้รับอนุญาตให้ใช้กล้อง");
+      showToast("การสแกนโค้ดล้มเหลว หรือไม่ได้รับอนุญาตให้ใช้กล้อง", "error");
     } finally {
       setScanning(false);
     }
   };
-
-
 
   const processScannedToken = async (token: string) => {
     setLoading(true);
@@ -250,10 +287,10 @@ export default function CustomerDashboard() {
         throw new Error(data.message || "การรับแต้มถูกปฏิเสธ");
       }
 
-      setScanResultMsg(`🎉 สะสมแต้มสำเร็จเพิ่มอีก +${data.addedPoints} แต้ม!`);
+      showToast(`🎉 สะสมแต้มสำเร็จเพิ่มอีก +${data.addedPoints} แต้ม!`, "success");
       await fetchProfile();
     } catch (err: any) {
-      setError(err.message || "ไม่สามารถสะสมแต้มจากรหัสนี้ได้");
+      showToast(err.message || "ไม่สามารถสะสมแต้มจากรหัสนี้ได้", "error");
     } finally {
       setLoading(false);
     }
@@ -437,35 +474,6 @@ export default function CustomerDashboard() {
               </p>
             </div>
 
-            {/* Developer testing copier */}
-            <div className="w-full bg-[#F9F9F9] border border-pink-100/30 p-2.5 rounded-xl space-y-1.5 text-[10px] text-left">
-              <span className="text-slate-450 block font-bold uppercase tracking-wider">รหัสคูปองสำหรับทดสอบ</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={activeRedeemToken}
-                  className="flex-1 bg-transparent border-none text-[#5C5556] font-mono focus:outline-none truncate text-[9px]"
-                />
-                <button
-                  onClick={copyRedeemTokenToClipboard}
-                  className="p-1 bg-[#FFFFFF] border border-pink-100/30 hover:text-[#FF7DA0] rounded text-slate-400 flex items-center gap-1 transition-all cursor-pointer"
-                >
-                  {copiedRedeem ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-500" />
-                      <span className="text-emerald-500">คัดลอกแล้ว</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>คัดลอก</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
             <button
               onClick={() => {
                 setActiveRedeemToken(null);
@@ -484,12 +492,12 @@ export default function CustomerDashboard() {
               <RefreshCw className="w-3 h-3" />
               รีเฟรช
             </div>
-
+ 
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#5C5556] mb-4 self-start">
               บัตรสะสมแต้มอุ้งเท้าแมว 🐾
             </h2>
-
-            {/* Stamp Card Grid (5-column Cat Paw Stamp Slots) */}
+ 
+            {/* Stamp Card Grid (5-column Cat Paw Stamp Slots with pop and pulse micro-interactions) */}
             <div className="w-full bg-[#FCF8F9] border border-pink-100/30 rounded-2xl p-4 flex flex-col items-center space-y-4 mb-4 shadow-inner">
               <div className="grid grid-cols-5 gap-3 w-full max-w-[280px]">
                 {[...Array(5)].map((_, i) => (
@@ -497,11 +505,14 @@ export default function CustomerDashboard() {
                     key={i} 
                     className={`aspect-square rounded-xl flex items-center justify-center border transition-all duration-300 ${
                       i < currentPoints 
-                        ? "bg-[#FFF0E5]/60 border-pink-200 shadow-sm" 
+                        ? "bg-[#FFF0E5]/60 border-pink-200 shadow-sm animate-paw-pop" 
                         : "bg-white/80 border-slate-100"
                     }`}
                   >
-                    <CatPaw active={i < currentPoints} className="w-8 h-8" />
+                    <CatPaw 
+                      active={i < currentPoints} 
+                      className={`w-8 h-8 ${i < currentPoints ? "animate-paw-active" : ""}`} 
+                    />
                   </div>
                 ))}
               </div>
@@ -687,6 +698,17 @@ export default function CustomerDashboard() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* Custom floating Toast notification */}
+      {toast.type && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold text-white border animate-toast-in ${
+          toast.type === "success" 
+            ? "bg-emerald-500 border-emerald-400 shadow-emerald-500/10" 
+            : "bg-red-500 border-red-400 shadow-red-500/10"
+        }`}>
+          {toast.type === "success" ? <CheckCircle className="w-4 h-4 text-white" /> : <XCircle className="w-4 h-4 text-white" />}
+          <span>{toast.message}</span>
         </div>
       )}
     </main>

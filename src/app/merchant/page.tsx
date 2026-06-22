@@ -8,7 +8,7 @@ import {
   Award, Loader2, RefreshCw, Smartphone, TrendingUp,
   Gift, ShieldAlert, ArrowLeftRight, Search, ListFilter,
   CheckCircle2, XCircle, Trash2, LogOut, QrCode, Copy, Check, Camera, Send,
-  Users, CheckCircle
+  Users, CheckCircle, Sparkles
 } from "lucide-react";
 
 interface TransactionItem {
@@ -50,8 +50,16 @@ export default function MerchantDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Custom Toast State
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
+  const showToast = (msg: string, type: "success" | "error") => {
+    setToast({ message: msg, type });
+    const timer = setTimeout(() => setToast({ message: "", type: null }), 4000);
+    return timer;
+  };
+
   // Search & Pagination History State
-  const [searchPhone, setSearchPhone] = useState("");
+  const [searchName, setSearchName] = useState("");
   const [actionType, setActionType] = useState<string>("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -201,8 +209,8 @@ export default function MerchantDashboard() {
   const fetchHistory = async (targetPage = page) => {
     setLoadingHistory(true);
     let queryParams = `?page=${targetPage}&limit=6`;
-    if (searchPhone.trim()) {
-      queryParams += `&searchPhone=${encodeURIComponent(searchPhone.trim())}`;
+    if (searchName.trim()) {
+      queryParams += `&searchName=${encodeURIComponent(searchName.trim())}`;
     }
     if (actionType) {
       queryParams += `&actionType=${actionType}`;
@@ -233,6 +241,29 @@ export default function MerchantDashboard() {
       }
     };
   }, [actionType]);
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (userRole) { // Only fetch if user session is loaded
+        fetchHistory(1);
+      }
+    }, 450);
+    return () => clearTimeout(delayDebounce);
+  }, [searchName]);
+
+  useEffect(() => {
+    if (success) {
+      const t = setTimeout(() => setSuccess(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const t = setTimeout(() => setError(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [error]);
 
   useEffect(() => {
     if (qrTtl <= 0) {
@@ -634,29 +665,6 @@ export default function MerchantDashboard() {
                       {Math.floor(qrTtl / 60)}:{(qrTtl % 60).toString().padStart(2, "0")}
                     </p>
                   </div>
-                  
-                  {/* DEVELOPER TESTING HELPER */}
-                  <div className="w-full bg-slate-950/60 border border-slate-850 p-2.5 rounded-xl space-y-1 text-[9px]">
-                    <span className="text-slate-500 block font-bold uppercase tracking-wider">โทเค็นสะสมแต้ม (สำหรับทดสอบ)</span>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={activeQR}
-                        className="flex-1 bg-transparent border-none text-slate-300 font-mono focus:outline-none truncate text-[9px]"
-                      />
-                      <button
-                        onClick={copyTokenToClipboard}
-                        className="p-1 bg-slate-900 border border-slate-800 hover:text-white rounded text-slate-400 flex items-center gap-1 transition-all cursor-pointer"
-                      >
-                        {copied ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <div className="w-full flex flex-col items-center justify-center py-6 px-6 border border-dashed border-slate-800 rounded-2xl text-center space-y-2">
@@ -708,34 +716,6 @@ export default function MerchantDashboard() {
                 </button>
               )}
 
-              {/* Developer camera-less redemption tool */}
-              {!scanningRedeem && (
-                <div className="w-full bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-2 text-left">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block">
-                    เครื่องมือเคลมคูปอง (สำหรับทดสอบ)
-                  </label>
-                  <form onSubmit={handleManualRedeemSubmit} className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="วางรหัสคูปอง 64 หลักของลูกค้า..."
-                      value={manualRedeemToken}
-                      onChange={(e) => setManualRedeemToken(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-950/60 border border-slate-800/80 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-600 text-xs transition-all"
-                    />
-                    <button
-                      type="submit"
-                      disabled={processingManualRedeem || !manualRedeemToken.trim()}
-                      className="px-3.5 bg-emerald-650 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 flex items-center justify-center transition-all"
-                    >
-                      {processingManualRedeem ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Send className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </form>
-                </div>
-              )}
             </div>
 
             {/* 3. Camera-less OTP Backup Verification Form */}
@@ -965,50 +945,74 @@ export default function MerchantDashboard() {
                 </div>
 
                 {/* C. Admin God Mode Actions */}
-                <div className="pt-4 border-t border-slate-850 space-y-4">
-                  <h4 className="text-xs font-bold text-red-400 flex items-center gap-1">
-                    <ShieldAlert className="w-4 h-4" />
-                    โหมดผู้ดูแลระบบสูงสุด (God Mode)
-                  </h4>
+                <div className="pt-5 border-t border-slate-850 space-y-4">
+                  <div className="flex items-center gap-1.5 text-rose-450">
+                    <ShieldAlert className="w-4 h-4 text-rose-500 animate-pulse" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider">
+                      โหมดผู้ดูแลระบบสูงสุด (God Mode)
+                    </h4>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Add point to all customers */}
-                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl space-y-3">
-                      <label className="text-[10px] font-bold text-slate-500 block">
-                        เพิ่มแต้มให้ลูกค้าทุกคนในระบบ
-                      </label>
-                      <div className="flex gap-2">
-                        <select
-                          value={godModePoints}
-                          onChange={(e) => setGodModePoints(Number(e.target.value))}
-                          className="px-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none text-slate-200 text-xs cursor-pointer appearance-none text-center"
-                        >
-                          {[1, 2, 3, 4, 5].map((v) => (
-                            <option key={v} value={v}>+{v} แต้ม</option>
-                          ))}
-                        </select>
+                    {/* Add point to all customers card */}
+                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-2xl flex flex-col justify-between space-y-4 hover:border-slate-800 transition-all">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider block">
+                          เพิ่มแต้มแจกทุกคน
+                        </span>
+                        <p className="text-[9px] text-slate-500 leading-relaxed">
+                          เพิ่มจำนวนแต้ม (+1 ถึง +5) ให้กับลูกค้า พนักงาน และแอดมินทุกคนในระบบพร้อมกัน
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <div className="relative flex-shrink-0">
+                          <select
+                            value={godModePoints}
+                            onChange={(e) => setGodModePoints(Number(e.target.value))}
+                            className="h-10 px-3 bg-slate-900 border border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs cursor-pointer appearance-none text-center font-bold font-mono min-w-[70px]"
+                          >
+                            {[1, 2, 3, 4, 5].map((v) => (
+                              <option key={v} value={v}>+{v}</option>
+                            ))}
+                          </select>
+                        </div>
                         <button
                           onClick={handleAdminAddPointsAll}
                           disabled={processingGodMode}
-                          className="flex-1 py-2 bg-indigo-650 hover:bg-indigo-750 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5"
+                          className="flex-1 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/10"
                         >
-                          {processingGodMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          {processingGodMode ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5" />
+                          )}
                           แจกทุกคน
                         </button>
                       </div>
                     </div>
 
-                    {/* Reset points for all customers */}
-                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex flex-col justify-between space-y-3">
-                      <label className="text-[10px] font-bold text-slate-500 block">
-                        ล้างแต้มลูกค้าทุกคน (เป็น 0 แต้ม)
-                      </label>
+                    {/* Reset points for all customers card */}
+                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-2xl flex flex-col justify-between space-y-4 hover:border-slate-800 transition-all">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-rose-450 uppercase tracking-wider block">
+                          ล้างแต้มทุกคนเป็น 0
+                        </span>
+                        <p className="text-[9px] text-slate-500 leading-relaxed">
+                          ⚠️ เคลียร์แต้มสะสมทั้งหมดของทุกคนให้กลายเป็นศูนย์ (ไม่สามารถเรียกคืนประวัติแต้มเดิมได้)
+                        </p>
+                      </div>
+
                       <button
                         onClick={handleAdminResetAll}
                         disabled={processingGodMode}
-                        className="w-full py-2 bg-red-650 hover:bg-red-750 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5"
+                        className="w-full h-10 bg-rose-650 hover:bg-rose-750 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/10"
                       >
-                        {processingGodMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {processingGodMode ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
                         ล้างแต้มลูกค้าทุกคน
                       </button>
                     </div>
@@ -1037,9 +1041,9 @@ export default function MerchantDashboard() {
                   <Search className="w-4 h-4 text-slate-555 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="ค้นหาเบอร์โทรศัพท์ลูกค้า..."
-                    value={searchPhone}
-                    onChange={(e) => setSearchPhone(e.target.value)}
+                    placeholder="ค้นหาชื่อเล่นหรือชื่อไลน์ลูกค้า..."
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-slate-950/40 border border-slate-850 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-550 text-xs transition-all focus:ring-1 focus:ring-indigo-500/20 font-semibold"
                   />
                 </div>
@@ -1201,6 +1205,28 @@ export default function MerchantDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast */}
+      {success && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm p-4 bg-slate-900 border border-emerald-500 rounded-2xl flex items-start gap-3 text-slate-200 text-xs shadow-2xl shadow-slate-950/85 animate-toast-in text-left">
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-450" />
+          <div className="flex-1">
+            <span>{success}</span>
+          </div>
+          <button onClick={() => setSuccess(null)} className="text-slate-500 hover:text-slate-200 text-xs cursor-pointer ml-1">✕</button>
+        </div>
+      )}
+
+      {/* Floating Error Toast */}
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm p-4 bg-slate-900 border border-rose-500 rounded-2xl flex items-start gap-3 text-slate-200 text-xs shadow-2xl shadow-slate-950/85 animate-toast-in text-left">
+          <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-450" />
+          <div className="flex-1">
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError(null)} className="text-slate-500 hover:text-slate-200 text-xs cursor-pointer ml-1">✕</button>
         </div>
       )}
     </main>

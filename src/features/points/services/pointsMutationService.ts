@@ -88,14 +88,13 @@ export class PointsMutationService {
 
           const currentOld = customer.currentPoints;
           const pendingOld = customer.pendingPoints;
-
-          // Dynamic point addition and overflow calculation!
+          const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
           let currentNew = currentOld + pointsDelta;
           let pendingNew = pendingOld;
 
-          if (currentNew > 5) {
-            pendingNew = pendingOld + (currentNew - 5);
-            currentNew = 5;
+          if (currentNew > maxPoints) {
+            pendingNew = pendingOld + (currentNew - maxPoints);
+            currentNew = maxPoints;
           }
 
           const isUpdated = await this.userRepository.updateUserPointsWithLock(
@@ -236,14 +235,14 @@ export class PointsMutationService {
             throw new ValidationError("User is not a valid customer.");
           }
 
-          // Coupon prerequisite validation
-          if (user.currentPoints !== 5) {
-            throw new ConflictError("Redemption requires exactly 5 active points.");
+          const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
+          if (user.currentPoints !== maxPoints) {
+            throw new ConflictError(`Redemption requires exactly ${maxPoints} active points.`);
           }
 
-          // Deduct 5 points and refill from pending
+          // Deduct points and refill from pending
           const pendingOld = user.pendingPoints;
-          const refillCount = Math.min(5, pendingOld);
+          const refillCount = Math.min(maxPoints, pendingOld);
           const currentNew = refillCount;
           const pendingNew = pendingOld - refillCount;
 
@@ -380,7 +379,8 @@ export class PointsMutationService {
         throw new ValidationError("User is not a valid customer.");
       }
 
-      const currentNew = Math.max(0, Math.min(5, user.currentPoints + currentDelta));
+      const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
+      const currentNew = Math.max(0, Math.min(maxPoints, user.currentPoints + currentDelta));
       const pendingNew = Math.max(0, user.pendingPoints + pendingDelta);
 
       await this.userRepository.updateUserPointsDirect(tx, customerId, currentNew, pendingNew);

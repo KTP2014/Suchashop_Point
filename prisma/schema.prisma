@@ -10,6 +10,9 @@ generator client {
 enum Role {
   CUSTOMER
   MERCHANT
+  STAFF
+  ADMIN
+  PENDING_APPROVAL
 }
 
 enum TransactionType {
@@ -23,6 +26,7 @@ model User {
   id             String         @id @default(auto()) @map("_id") @db.ObjectId
   phoneNumber    String?        // Made optional and non-unique at DB level to prevent multiple-null duplicate key errors in MongoDB
   lineUserId     String?        // Populated only for CUSTOMERS who login with LINE
+  displayName    String?        // Added: LINE profile display name
   role           Role
   passwordHash   String?        // Populated only for MERCHANTS
   birthdateHash  String?        // Populated only for CUSTOMERS
@@ -66,4 +70,14 @@ model Transaction {
   @@index([customerPhoneNumber])
   @@index([operatorId, createdAt])
   @@index([createdAt])
+}
+
+model OtpCode {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  code      String   @unique
+  userId    String   @db.ObjectId
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

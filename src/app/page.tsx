@@ -37,16 +37,23 @@ export default function LoginPage() {
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           const lineUserId = profile.userId;
+          const displayName = profile.displayName;
 
           // Call liff-login endpoint to set session cookie
           const res = await fetch("/api/auth/liff-login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lineUserId }),
+            body: JSON.stringify({ lineUserId, displayName }),
           });
 
           if (res.ok) {
-            router.push("/customer");
+            const data = await res.json();
+            const role = data.user?.role;
+            if (role === "ADMIN" || role === "STAFF" || role === "MERCHANT") {
+              router.push("/merchant");
+            } else {
+              router.push("/customer");
+            }
           }
         }
       } catch (err) {

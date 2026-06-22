@@ -3,12 +3,13 @@ import { UserRepository } from "../../../../features/auth/repository/userReposit
 import { signToken, JWTPayload } from "../../../../features/auth/services/jwt";
 import { cookies } from "next/headers";
 import { Role } from "@prisma/client";
+import { prisma } from "../../../../lib/prisma";
 
 const userRepository = new UserRepository();
 
 export async function POST(request: Request) {
   try {
-    const { lineUserId } = await request.json();
+    const { lineUserId, displayName } = await request.json();
 
     if (!lineUserId) {
       return NextResponse.json({ 
@@ -21,14 +22,29 @@ export async function POST(request: Request) {
     let user = await userRepository.findByLineUserId(lineUserId);
 
     if (!user) {
-      // Auto-Register new LINE user
-      user = await userRepository.createCustomerWithLine(lineUserId);
+      // Auto-Register new LINE user with display name
+      user = await prisma.user.create({
+        data: {
+          lineUserId,
+          displayName: displayName || null,
+          role: Role.CUSTOMER,
+          currentPoints: 0,
+          pendingPoints: 0,
+          version: 0,
+        },
+      });
+    } else if (displayName && user.displayName !== displayName) {
+      // Update display name if changed
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { displayName },
+      });
     }
 
     const payload: JWTPayload = {
       userId: user.id,
       phoneNumber: user.phoneNumber || "",
-      role: Role.CUSTOMER,
+      role: user.role,
     };
 
     // Sign custom token matching Edge middleware expectations (30 days validity)

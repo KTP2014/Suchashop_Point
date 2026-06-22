@@ -7,17 +7,9 @@ import { Html5Qrcode } from "html5-qrcode";
 import {
   Award, Loader2, RefreshCw, Smartphone, TrendingUp,
   Gift, ShieldAlert, ArrowLeftRight, Search, ListFilter,
-  CheckCircle2, XCircle, Trash2, LogOut, QrCode, Copy, Check, Camera, Send
+  CheckCircle2, XCircle, Trash2, LogOut, QrCode, Copy, Check, Camera, Send,
+  Users, CheckCircle
 } from "lucide-react";
-
-interface DashboardStats {
-  todayTransactions: number;
-  todayCustomers: number;
-  todayEarns: number;
-  todayRedeems: number;
-  todayResets: number;
-  fromCache?: boolean;
-}
 
 interface TransactionItem {
   id: string;
@@ -31,11 +23,29 @@ interface TransactionItem {
   createdAt: string;
 }
 
+interface PendingStaffItem {
+  id: string;
+  displayName: string | null;
+  phoneNumber: string | null;
+  lineUserId: string | null;
+  createdAt: string;
+}
+
+interface ConfirmModalState {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  danger?: boolean;
+}
+
 export default function MerchantDashboard() {
   const router = useRouter();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
   const [history, setHistory] = useState<TransactionItem[]>([]);
-  const [loadingStats, setLoadingStats] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -47,7 +57,7 @@ export default function MerchantDashboard() {
   const [totalPages, setTotalPages] = useState(1);
 
   // QR Code Generation State (Merchant Earning Points)
-  const [pointsToGrant, setPointsToGrant] = useState<number>(1); // Dynamic points delta!
+  const [pointsToGrant, setPointsToGrant] = useState<number>(1);
   const [activeQR, setActiveQR] = useState<string | null>(null);
   const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
   const [qrTtl, setQrTtl] = useState(0);
@@ -60,30 +70,114 @@ export default function MerchantDashboard() {
   const [processingManualRedeem, setProcessingManualRedeem] = useState(false);
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
-  const fetchStats = async () => {
+  // OTP Verification State (Camera-less backup)
+  const [otpCode, setOtpCode] = useState("");
+  const [otpActionType, setOtpActionType] = useState<"EARN" | "REDEEM">("EARN");
+  const [otpPoints, setOtpPoints] = useState<number>(1);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+
+  // Admin Pending Staff State
+  const [pendingStaff, setPendingStaff] = useState<PendingStaffItem[]>([]);
+  const [loadingPendingStaff, setLoadingPendingStaff] = useState(false);
+
+  // Admin God Mode State
+  const [godModePoints, setGodModePoints] = useState<number>(1);
+  const [processingGodMode, setProcessingGodMode] = useState(false);
+
+  // Custom Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
+
+  const triggerConfirm = (title: string, message: string, onConfirm: () => void, danger = false) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm,
+      danger,
+    });
+  };
+
+  const checkUserAccess = async () => {
     try {
-      const res = await fetch("/api/merchant/dashboard");
+      const res = await fetch("/api/customer/profile");
       if (!res.ok) {
-        if (res.status === 401) {
-          router.push("/");
-          return;
-        }
-        throw new Error("Failed to load dashboard metrics.");
+        router.push("/");
+        return;
       }
       const data = await res.json();
       if (data.success) {
-        setStats(data);
+        if (data.role === "ADMIN" || data.role === "STAFF" || data.role === "MERCHANT") {
+          setUserRole(data.role);
+          setUserName(data.displayName || "ผู้จัดการ");
+          setLoadingUser(false);
+          if (data.role === "ADMIN") {
+            fetchPendingStaff();
+          }
+        } else {
+          router.push("/customer");
+        }
       }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoadingStats(false);
+    } catch (err) {
+      router.push("/");
     }
+  };
+
+  const fetchPendingStaff = async () => {
+    setLoadingPendingStaff(true);
+    try {
+      const res = await fetch("/api/merchant/pending-staff");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setPendingStaff(data.users || []);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPendingStaff(false);
+    }
+  };
+
+  const handleApproveStaff = async (userId: string, approvedRole: "STAFF" | "ADMIN" | "REJECT", displayName: string) => {
+    let actionLabel = "";
+    if (approvedRole === "STAFF") actionLabel = "อนุมัติเป็นพนักงาน";
+    if (approvedRole === "ADMIN") actionLabel = "อนุมัติเป็นผู้ดูแลระบบ";
+    if (approvedRole === "REJECT") actionLabel = "ปฏิเสธคำขอสมัคร";
+
+    triggerConfirm(
+      "ยืนยันการทำรายการอนุมัติสิทธิ์",
+      `คุณต้องการทำการ [${actionLabel}] ให้กับคุณ ${displayName} ใช่หรือไม่?`,
+      async () => {
+        setError(null);
+        setSuccess(null);
+        try {
+          const res = await fetch("/api/merchant/approve-staff", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, approvedRole }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.message || "การอนุมัติสิทธิ์พนักงานล้มเหลว");
+          }
+          setSuccess(`ทำรายการ [${actionLabel}] ให้กับคุณ ${displayName} สำเร็จ!`);
+          await fetchPendingStaff();
+        } catch (err: any) {
+          setError(err.message || "เกิดข้อผิดพลาดในการทำรายการอนุมัติสิทธิ์");
+        }
+      }
+    );
   };
 
   const fetchHistory = async (targetPage = page) => {
     setLoadingHistory(true);
-    let queryParams = `?page=${targetPage}&limit=5`;
+    let queryParams = `?page=${targetPage}&limit=6`;
     if (searchPhone.trim()) {
       queryParams += `&searchPhone=${encodeURIComponent(searchPhone.trim())}`;
     }
@@ -93,7 +187,7 @@ export default function MerchantDashboard() {
 
     try {
       const res = await fetch(`/api/merchant/history${queryParams}`);
-      if (!res.ok) throw new Error("Failed to sync history ledger.");
+      if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลประวัติการทำรายการได้");
       const data = await res.json();
       if (data.success) {
         setHistory(data.transactions);
@@ -108,7 +202,7 @@ export default function MerchantDashboard() {
   };
 
   useEffect(() => {
-    fetchStats();
+    checkUserAccess();
     fetchHistory(1);
     return () => {
       if (qrScannerRef.current && qrScannerRef.current.isScanning) {
@@ -141,7 +235,6 @@ export default function MerchantDashboard() {
     setCopied(false);
 
     try {
-      // POST custom points to backend payload
       const res = await fetch("/api/merchant/generate-earn-qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,7 +243,7 @@ export default function MerchantDashboard() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to generate QR token.");
+        throw new Error(data.message || "ไม่สามารถสร้างโทเค็น QR ได้");
       }
 
       const rawToken = data.token;
@@ -169,7 +262,7 @@ export default function MerchantDashboard() {
       setQrBlobUrl(qrDataUrl);
       setQrTtl(300); // 5 Minutes
     } catch (err: any) {
-      setError(err.message || "Unable to request token.");
+      setError(err.message || "เกิดข้อผิดพลาดในการสร้าง QR สะสมแต้ม");
     } finally {
       setGeneratingQR(false);
     }
@@ -251,7 +344,6 @@ export default function MerchantDashboard() {
   };
 
   const processRedemptionCoupon = async (token: string) => {
-    setLoadingStats(true);
     setError(null);
     setSuccess(null);
 
@@ -264,50 +356,159 @@ export default function MerchantDashboard() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Redemption request failed.");
+        throw new Error(data.message || "การแลกของรางวัลล้มเหลว");
       }
 
-      setSuccess("🎉 Reward successfully claimed and points reset!");
-      await fetchStats();
+      setSuccess("🎉 แลกรางวัลคูปองและหักแต้มเรียบร้อยแล้ว!");
       await fetchHistory(page);
     } catch (err: any) {
-      setError(err.message || "Failed to process redemption.");
-    } finally {
-      setLoadingStats(false);
+      setError(err.message || "เกิดข้อผิดพลาดในการประมวลผลคูปองแลกรางวัล");
     }
   };
 
-  const handleReset = async (customerId: string, customerPhone: string) => {
-    const isConfirmed = confirm(
-      `⚠️ WARNING!\nAre you sure you want to ADMINISTRATIVE RESET points for customer ${customerPhone}?\nThis will completely wipe all current and pending points to 0. This action is irreversible.`
+  // v2.0 Verify Customer OTP backup
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpCode.length !== 6 || !/^[0-9]+$/.test(otpCode)) {
+      setError("กรุณากรอกรหัส OTP เป็นตัวเลข 6 หลัก");
+      return;
+    }
+
+    const actionLabel = otpActionType === "EARN" ? `สะสมแต้มจำนวน +${otpPoints} แต้ม` : "แลกรับของรางวัลและล้างแต้ม";
+    triggerConfirm(
+      "ยืนยันการทำรายการผ่าน OTP",
+      `คุณต้องการทำรายการ [${actionLabel}] สำหรับรหัส OTP: ${otpCode} ใช่หรือไม่?`,
+      async () => {
+        setVerifyingOtp(true);
+        setError(null);
+        setSuccess(null);
+
+        try {
+          const res = await fetch("/api/merchant/verify-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              otpCode,
+              actionType: otpActionType,
+              points: otpActionType === "EARN" ? otpPoints : undefined,
+            }),
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.success) {
+            throw new Error(data.message || "การตรวจสอบสิทธิ์รหัส OTP ล้มเหลว");
+          }
+
+          setSuccess(`ทำรายการสำเร็จ: ${data.message}`);
+          setOtpCode("");
+          await fetchHistory(page);
+        } catch (err: any) {
+          setError(err.message || "เกิดข้อผิดพลาดในการตรวจสอบรหัส OTP");
+        } finally {
+          setVerifyingOtp(false);
+        }
+      }
     );
-    if (!isConfirmed) return;
-
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const res = await fetch("/api/merchant/customer/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Points reset failed.");
-      }
-
-      setSuccess(`✅ Points successfully wiped to 0 for customer ${customerPhone}!`);
-      await fetchStats();
-      await fetchHistory(page);
-    } catch (err: any) {
-      setError(err.message || "Reset request failed.");
-    }
   };
+
+  // Admin God Mode: Reset all customers
+  const handleAdminResetAll = () => {
+    triggerConfirm(
+      "⚠️ คำเตือน: รีเซ็ตแต้มลูกค้าทุกคน!",
+      "คุณต้องการล้างแต้ม (รีเซ็ตแต้มสะสมทั้งหมดและแต้มคิวส่วนเกิน) ของลูกค้าทุกคนในระบบให้เป็น 0 แต้ม ใช่หรือไม่? การทำรายการนี้จะไม่สามารถย้อนกลับได้!",
+      async () => {
+        setProcessingGodMode(true);
+        setError(null);
+        setSuccess(null);
+        try {
+          const res = await fetch("/api/merchant/admin/reset-all", {
+            method: "POST",
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.message || "การรีเซ็ตแต้มลูกค้าทุกคนล้มเหลว");
+          }
+          setSuccess(`ล้างแต้มลูกค้าทั้งหมดสำเร็จ (${data.count} บัญชี)`);
+          await fetchHistory(page);
+        } catch (err: any) {
+          setError(err.message || "เกิดข้อผิดพลาดในการรีเซ็ตแต้ม");
+        } finally {
+          setProcessingGodMode(false);
+        }
+      },
+      true
+    );
+  };
+
+  // Admin God Mode: Grant points to everyone
+  const handleAdminAddPointsAll = () => {
+    triggerConfirm(
+      "ยืนยันการเพิ่มแต้มแจกทุกคน",
+      `คุณต้องการเพิ่มแต้มสะสม (+${godModePoints} แต้ม) ให้กับลูกค้าทุกคนในระบบใช่หรือไม่? สำหรับคนที่มีแต้มเกินจะถูกเก็บไว้ที่แต้มรอคิว (Overflow)`,
+      async () => {
+        setProcessingGodMode(true);
+        setError(null);
+        setSuccess(null);
+        try {
+          const res = await fetch("/api/merchant/admin/add-point-all", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ points: godModePoints }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.message || "การเพิ่มแต้มแจกลูกค้าทุกคนล้มเหลว");
+          }
+          setSuccess(`แจกแต้มให้ลูกค้าทุกคนสำเร็จ (+${godModePoints} แต้ม, ${data.count} บัญชี)`);
+          await fetchHistory(page);
+        } catch (err: any) {
+          setError(err.message || "เกิดข้อผิดพลาดในการแจกแต้ม");
+        } finally {
+          setProcessingGodMode(false);
+        }
+      }
+    );
+  };
+
+  // Single customer manual point wipe
+  const handleResetSingleCustomer = (customerId: string, customerPhone: string) => {
+    triggerConfirm(
+      "⚠️ ล้างแต้มลูกค้ารายบุคคล!",
+      `คุณต้องการรีเซ็ตแต้มสะสมทั้งหมดของเบอร์โทร ${customerPhone} ให้เป็น 0 ใช่หรือไม่?`,
+      async () => {
+        setError(null);
+        setSuccess(null);
+        try {
+          const res = await fetch("/api/merchant/customer/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ customerId }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.message || "การรีเซ็ตแต้มลูกค้าคนนี้ล้มเหลว");
+          }
+          setSuccess(`ล้างแต้มของคุณ ${customerPhone} สำเร็จ!`);
+          await fetchHistory(page);
+        } catch (err: any) {
+          setError(err.message || "เกิดข้อผิดพลาดในการล้างแต้มลูกค้า");
+        }
+      },
+      true
+    );
+  };
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
+        <p className="text-sm text-slate-400 font-semibold">กำลังตรวจสอบสิทธิ์การใช้งาน...</p>
+      </div>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-[#090a0f] text-slate-100 p-6 relative overflow-hidden font-sans">
+    <main className="min-h-screen bg-[#090a0f] text-slate-100 p-6 relative overflow-hidden font-sans select-none">
       <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-indigo-950/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-violet-950/10 blur-[120px] pointer-events-none" />
 
@@ -319,77 +520,67 @@ export default function MerchantDashboard() {
             <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
               <Award className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-sm tracking-tight text-slate-200">Merchant Dashboard</span>
+            <div className="flex flex-col text-left">
+              <span className="font-bold text-sm tracking-tight text-slate-200">Sucha Shop ระบบหลังร้าน</span>
+              <span className="text-[9px] text-slate-400">
+                พนักงาน: {userName} • สิทธิ์: {userRole === "ADMIN" ? "ผู้ดูแลระบบ (Admin)" : "พนักงานร้าน (Staff)"}
+              </span>
+            </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2 text-slate-400 hover:text-slate-200 bg-slate-950/40 border border-slate-800/60 rounded-xl transition-all cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push("/customer")}
+              className="px-3.5 py-2 text-xs font-bold text-slate-350 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/40 rounded-xl transition-all cursor-pointer"
+            >
+              หน้าลูกค้า (Test)
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-slate-400 hover:text-slate-250 bg-slate-950/40 border border-slate-800/60 rounded-xl transition-all cursor-pointer animate-pulse"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Global Feedback Banners */}
         {success && (
-          <div className="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl flex items-start gap-3 text-emerald-300 text-sm animate-fade-in relative">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <span>{success}</span>
+          <div className="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl flex items-start gap-3 text-emerald-300 text-sm animate-fade-in relative text-left">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
+            <div className="flex-1">
+              <span>{success}</span>
+            </div>
             <button onClick={() => setSuccess(null)} className="absolute top-2 right-2 text-emerald-400 hover:text-emerald-200 text-xs cursor-pointer">✕</button>
           </div>
         )}
 
         {error && (
-          <div className="p-4 bg-red-950/30 border border-red-500/30 rounded-2xl flex items-start gap-3 text-red-300 text-sm animate-shake relative">
-            <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <span>{error}</span>
+          <div className="p-4 bg-red-950/30 border border-red-500/30 rounded-2xl flex items-start gap-3 text-red-300 text-sm animate-shake relative text-left">
+            <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
+            <div className="flex-1">
+              <span>{error}</span>
+            </div>
             <button onClick={() => setError(null)} className="absolute top-2 right-2 text-red-400 hover:text-red-200 text-xs cursor-pointer">✕</button>
           </div>
         )}
 
-        {/* Top Grid: Metrics Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-4 rounded-2xl flex flex-col justify-between">
-            <span className="text-xs font-semibold text-slate-400">Served Today</span>
-            <span className="text-2xl font-bold text-slate-100 mt-2">{stats?.todayTransactions ?? 0}</span>
-          </div>
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-4 rounded-2xl flex flex-col justify-between">
-            <span className="text-xs font-semibold text-slate-400">Unique Customer</span>
-            <span className="text-2xl font-bold text-slate-100 mt-2">{stats?.todayCustomers ?? 0}</span>
-          </div>
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-4 rounded-2xl flex flex-col justify-between">
-            <span className="text-xs font-semibold text-slate-400">Points Earned</span>
-            <span className="text-2xl font-bold text-emerald-400 mt-2">+{stats?.todayEarns ?? 0}</span>
-          </div>
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-4 rounded-2xl flex flex-col justify-between">
-            <span className="text-xs font-semibold text-slate-400">Redemptions</span>
-            <span className="text-2xl font-bold text-violet-400 mt-2">{stats?.todayRedeems ?? 0}</span>
-          </div>
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-4 rounded-2xl flex flex-col justify-between col-span-2 md:col-span-1">
-            <span className="text-xs font-semibold text-slate-400 flex items-center justify-between">
-              Resets
-              {stats?.fromCache && <span className="text-[10px] bg-slate-950/60 border border-slate-800 px-1.5 py-0.5 rounded text-slate-500">Cached</span>}
-            </span>
-            <span className="text-2xl font-bold text-red-400 mt-2">{stats?.todayResets ?? 0}</span>
-          </div>
-        </div>
-
         {/* Main Body Split Panel */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* Left Column: QR Generator & Scanning Coupons */}
+          {/* Left Column: QR Generator & Scanning Coupons & OTP Verify */}
           <div className="lg:col-span-5 space-y-6">
             
             {/* 1. Dynamic Points QR Generator */}
-            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-6 rounded-3xl flex flex-col items-center justify-center space-y-4">
+            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-5 rounded-3xl flex flex-col items-center justify-center space-y-4 text-left">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 self-start">
                 <QrCode className="w-4 h-4 text-indigo-400" />
-                Dynamic Points Generator
+                เครื่องสร้าง QR สะสมแต้ม
               </h3>
 
               {/* Point Input selector (1 to 5) */}
               <div className="w-full space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                  Select Points to Grant (+{pointsToGrant} Pts)
+                  ระบุจำนวนแต้มสะสม (+{pointsToGrant} แต้ม)
                 </label>
                 <div className="grid grid-cols-5 gap-2">
                   {[1, 2, 3, 4, 5].map((p) => (
@@ -399,8 +590,8 @@ export default function MerchantDashboard() {
                       onClick={() => setPointsToGrant(p)}
                       className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         pointsToGrant === p
-                          ? "bg-indigo-600 text-white border border-indigo-500"
-                          : "bg-slate-950/60 border border-slate-800/60 text-slate-400 hover:text-slate-200"
+                          ? "bg-indigo-650 text-white border border-indigo-500 shadow-md shadow-indigo-600/10"
+                          : "bg-slate-950/60 border border-slate-850 text-slate-400 hover:text-slate-200"
                       }`}
                     >
                       +{p}
@@ -410,20 +601,20 @@ export default function MerchantDashboard() {
               </div>
 
               {qrBlobUrl && activeQR ? (
-                <div className="flex flex-col items-center space-y-3 w-full">
-                  <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-2xl shadow-inner">
-                    <img src={qrBlobUrl} alt="Active points claim QR Code" className="w-44 h-44 rounded-xl" />
+                <div className="flex flex-col items-center space-y-3 w-full animate-fade-in">
+                  <div className="p-2.5 bg-slate-950 border border-slate-850 rounded-2xl shadow-inner">
+                    <img src={qrBlobUrl} alt="คิวอาร์โค้ดสำหรับสะสมแต้ม" className="w-44 h-44 rounded-xl" />
                   </div>
                   <div className="text-center">
-                    <p className="text-[9px] text-slate-500">QR Code (+{pointsToGrant} Pts) valid for:</p>
-                    <p className="text-md font-bold text-amber-400">
+                    <p className="text-[9px] text-slate-500">QR Code (+{pointsToGrant} แต้ม) จะหมดอายุใน:</p>
+                    <p className="text-md font-bold text-amber-400 font-mono">
                       {Math.floor(qrTtl / 60)}:{(qrTtl % 60).toString().padStart(2, "0")}
                     </p>
                   </div>
                   
                   {/* DEVELOPER TESTING HELPER */}
-                  <div className="w-full bg-slate-950/60 border border-slate-800/80 p-2.5 rounded-xl space-y-1 text-[9px] text-left">
-                    <span className="text-slate-500 block font-bold uppercase tracking-wider">Active Token (Copy & Paste to Customer)</span>
+                  <div className="w-full bg-slate-950/60 border border-slate-850 p-2.5 rounded-xl space-y-1 text-[9px]">
+                    <span className="text-slate-500 block font-bold uppercase tracking-wider">โทเค็นสะสมแต้ม (สำหรับทดสอบ)</span>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -447,34 +638,34 @@ export default function MerchantDashboard() {
               ) : (
                 <div className="w-full flex flex-col items-center justify-center py-6 px-6 border border-dashed border-slate-800 rounded-2xl text-center space-y-2">
                   <QrCode className="w-10 h-10 text-slate-700 stroke-[1.5]" />
-                  <p className="text-xs text-slate-500">No active points QR displayed.</p>
+                  <p className="text-xs text-slate-500">ยังไม่มีการสร้าง QR สะสมแต้ม</p>
                 </div>
               )}
 
               <button
                 onClick={generateEarnQR}
                 disabled={generatingQR}
-                className="w-full py-3.5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98] hover:shadow-indigo-600/40"
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98]"
               >
                 {generatingQR ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  "Display Dynamic Earn QR"
+                  "แสดง QR สะสมแต้ม"
                 )}
               </button>
             </div>
 
             {/* 2. Customer Coupon Redemption Scanner */}
-            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-6 rounded-3xl flex flex-col items-center justify-center space-y-4">
+            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-5 rounded-3xl flex flex-col items-center justify-center space-y-4 text-left">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 self-start">
-                <Gift className="w-4 h-4 text-emerald-400 animate-pulse" />
-                Redemption Coupon Scanner
+                <Gift className="w-4 h-4 text-emerald-400" />
+                สแกนคูปองแลกรางวัลลูกค้า
               </h3>
 
               {scanningRedeem ? (
                 <div className="w-full space-y-3 animate-fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Scan Customer Redemption Coupon</span>
+                    <span className="text-xs text-slate-400">สแกนคูปอง QR โค้ดของลูกค้า</span>
                     <button
                       onClick={stopRedeemScanner}
                       className="p-1 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded text-slate-400 cursor-pointer"
@@ -487,10 +678,10 @@ export default function MerchantDashboard() {
               ) : (
                 <button
                   onClick={startRedeemScanner}
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98] hover:shadow-emerald-600/40"
+                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98]"
                 >
                   <Camera className="w-4.5 h-4.5" />
-                  Scan Customer Coupon
+                  เปิดกล้องสแกนคูปองลูกค้า
                 </button>
               )}
 
@@ -498,20 +689,20 @@ export default function MerchantDashboard() {
               {!scanningRedeem && (
                 <div className="w-full bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-2 text-left">
                   <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block">
-                    Camera-less Coupon Tool (Paste Customer Token)
+                    เครื่องมือเคลมคูปอง (สำหรับทดสอบ)
                   </label>
                   <form onSubmit={handleManualRedeemSubmit} className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Paste 64-char Customer Coupon Token..."
+                      placeholder="วางรหัสคูปอง 64 หลักของลูกค้า..."
                       value={manualRedeemToken}
                       onChange={(e) => setManualRedeemToken(e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-slate-950/60 border border-slate-800/80 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-650 text-xs transition-all"
+                      className="flex-1 px-3 py-2 bg-slate-950/60 border border-slate-800/80 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-600 text-xs transition-all"
                     />
                     <button
                       type="submit"
                       disabled={processingManualRedeem || !manualRedeemToken.trim()}
-                      className="px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 flex items-center justify-center transition-all"
+                      className="px-3.5 bg-emerald-650 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 flex items-center justify-center transition-all"
                     >
                       {processingManualRedeem ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -524,147 +715,402 @@ export default function MerchantDashboard() {
               )}
             </div>
 
-          </div>
+            {/* 3. Camera-less OTP Backup Verification Form */}
+            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-5 rounded-3xl flex flex-col space-y-4 text-left">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Smartphone className="w-4 h-4 text-[#FF7DA0]" />
+                ระบบสะสมแต้มผ่านรหัส OTP (กล้องเสีย/ไม่มีกล้อง)
+              </h3>
 
-          {/* Right Column: Search history & admin reset */}
-          <div className="lg:col-span-7 bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-6 rounded-3xl flex flex-col space-y-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 self-start">
-              Point History Ledger
-            </h3>
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    รหัส OTP 6 หลักของลูกค้า
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="ตัวอย่าง 123456"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800/80 rounded-2xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-600 text-sm tracking-widest font-bold text-center transition-all font-mono"
+                  />
+                </div>
 
-            {/* Filter Search bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2 relative">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search customer phone..."
-                  value={searchPhone}
-                  onChange={(e) => setSearchPhone(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-500 text-xs transition-all focus:ring-1 focus:ring-indigo-500/20"
-                />
-              </div>
-              <div className="relative">
-                <ListFilter className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <select
-                  value={actionType}
-                  onChange={(e) => setActionType(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 text-xs transition-all appearance-none cursor-pointer"
-                >
-                  <option value="">All Types</option>
-                  <option value="EARN">EARN</option>
-                  <option value="REDEEM">REDEEM</option>
-                  <option value="RESET">RESET</option>
-                  <option value="ADJUSTMENT">ADJUST</option>
-                </select>
-              </div>
-            </div>
-            <button
-              onClick={() => fetchHistory(1)}
-              className="w-full py-2 bg-slate-950/60 border border-slate-800/60 hover:bg-slate-900 rounded-xl text-xs font-semibold cursor-pointer text-slate-300 transition-all flex items-center justify-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Search & Filter
-            </button>
-
-            {/* History Table List */}
-            {loadingHistory ? (
-              <div className="flex-1 flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-              </div>
-            ) : history.length > 0 ? (
-              <div className="space-y-4 flex-1">
-                {history.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="p-4 bg-slate-950/40 border border-slate-800/60 rounded-2xl flex items-center justify-between gap-4 text-xs animate-fade-in"
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOtpActionType("EARN")}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      otpActionType === "EARN"
+                        ? "bg-indigo-650 text-white border-indigo-500"
+                        : "bg-slate-950/60 border-slate-850 text-slate-400 hover:text-slate-200"
+                    }`}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-200">{tx.customerPhoneNumber}</span>
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            tx.type === "EARN"
-                              ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800"
-                              : tx.type === "REDEEM"
-                              ? "bg-violet-950/60 text-violet-400 border border-violet-800"
-                              : tx.type === "RESET"
-                              ? "bg-red-950/60 text-red-400 border border-red-800"
-                              : "bg-slate-900 text-slate-400 border border-slate-700"
+                    สะสมแต้ม (Earn)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOtpActionType("REDEEM")}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      otpActionType === "REDEEM"
+                        ? "bg-emerald-650 text-white border-emerald-500"
+                        : "bg-slate-950/60 border-slate-850 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    แลกรางวัล (Redeem)
+                  </button>
+                </div>
+
+                {otpActionType === "EARN" && (
+                  <div className="space-y-2 animate-fade-in text-left">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                      จำนวนแต้มที่สะสมผ่าน OTP (+{otpPoints} แต้ม)
+                    </label>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[1, 2, 3, 4, 5].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setOtpPoints(p)}
+                          className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            otpPoints === p
+                              ? "bg-indigo-600 text-white border border-indigo-500"
+                              : "bg-slate-950/40 border border-slate-800/60 text-slate-400 hover:text-slate-200"
                           }`}
                         >
-                          {tx.type}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        {new Date(tx.createdAt).toLocaleString()}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="font-bold">
-                          {tx.currentChange !== 0 && (
-                            <span className={tx.currentChange > 0 ? "text-emerald-400" : "text-red-400"}>
-                              {tx.currentChange > 0 ? `+${tx.currentChange}` : tx.currentChange} current
-                            </span>
-                          )}
-                          {tx.pendingChange !== 0 && (
-                            <span className={`block text-[10px] ${tx.pendingChange > 0 ? "text-indigo-400" : "text-amber-500"}`}>
-                              {tx.pendingChange > 0 ? `+${tx.pendingChange}` : tx.pendingChange} pending
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Result: {tx.resultingCurrent} / {tx.resultingPending} pts
-                        </div>
-                      </div>
-
-                      {tx.type !== "RESET" && (
-                        <button
-                          onClick={() => handleReset(tx.customerId, tx.customerPhoneNumber)}
-                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-950/30 border border-slate-800 rounded-xl transition-all cursor-pointer"
-                          title="Administrative Reset Points"
-                        >
-                          <Trash2 className="w-4 h-4" />
+                          +{p}
                         </button>
-                      )}
+                      ))}
                     </div>
-                  </div>
-                ))}
-
-                {/* Pagination Indicators */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-800/40">
-                    <button
-                      disabled={page <= 1}
-                      onClick={() => fetchHistory(page - 1)}
-                      className="px-3.5 py-1.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-slate-500 text-xs">
-                      Page {page} of {totalPages}
-                    </span>
-                    <button
-                      disabled={page >= totalPages}
-                      onClick={() => fetchHistory(page + 1)}
-                      className="px-3.5 py-1.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50"
-                    >
-                      Next
-                    </button>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-16 text-center space-y-2">
-                <ArrowLeftRight className="w-10 h-10 text-slate-700 stroke-[1.5]" />
-                <p className="text-xs text-slate-500">No point history matching filters.</p>
+
+                <button
+                  type="submit"
+                  disabled={verifyingOtp || otpCode.length !== 6}
+                  className="w-full py-3.5 bg-gradient-to-r from-[#FF7DA0] to-pink-600 hover:from-pink-500 hover:to-pink-700 text-white rounded-2xl font-bold shadow-lg shadow-pink-600/10 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {verifyingOtp ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "ตรวจสอบและยืนยันรหัส OTP"
+                  )}
+                </button>
+              </form>
+            </div>
+
+          </div>
+
+          {/* Right Column: Ledger Log & Admin Control Center */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* ADMIN CONTROL PANEL: (Approvals & God Mode) */}
+            {userRole === "ADMIN" && (
+              <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-6 rounded-3xl space-y-6 text-left">
+                <div className="flex items-center gap-2 border-b border-slate-850 pb-3">
+                  <Users className="w-5 h-5 text-amber-500 animate-pulse" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-amber-400">
+                    แผงควบคุมระบบ (Admin Console)
+                  </h3>
+                </div>
+
+                {/* A. Pending Staff Approvals Panel */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-350">
+                    คำขออนุมัติสิทธิ์พนักงานร้าน
+                  </h4>
+                  
+                  {loadingPendingStaff ? (
+                    <div className="py-4 text-center">
+                      <Loader2 className="w-5 h-5 text-amber-500 animate-spin mx-auto" />
+                    </div>
+                  ) : pendingStaff.length > 0 ? (
+                    <div className="space-y-3">
+                      {pendingStaff.map((staff) => (
+                        <div 
+                          key={staff.id} 
+                          className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="space-y-1">
+                            <div className="font-bold text-slate-200">
+                              {staff.displayName || "ไม่ระบุชื่อ"}
+                            </div>
+                            <div className="text-[10px] text-slate-500 leading-normal">
+                              เบอร์: {staff.phoneNumber || "ไม่มี"} • LINE: {staff.lineUserId ? staff.lineUserId.slice(0, 10) + "..." : "ไม่มี"}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-1.5 self-end sm:self-center">
+                            <button
+                              onClick={() => handleApproveStaff(staff.id, "STAFF", staff.displayName || "ไม่ระบุชื่อ")}
+                              className="px-2.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.95]"
+                            >
+                              พนักงาน (Staff)
+                            </button>
+                            <button
+                              onClick={() => handleApproveStaff(staff.id, "ADMIN", staff.displayName || "ไม่ระบุชื่อ")}
+                              className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/30 text-amber-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.95]"
+                            >
+                              แอดมิน (Admin)
+                            </button>
+                            <button
+                              onClick={() => handleApproveStaff(staff.id, "REJECT", staff.displayName || "ไม่ระบุชื่อ")}
+                              className="px-2.5 py-1.5 bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.95]"
+                            >
+                              ปฏิเสธ
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-950/20 border border-dashed border-slate-850 rounded-2xl text-center">
+                      <p className="text-xs text-slate-500">ไม่มีคำขอสิทธิ์พนักงานที่ค้างอนุมัติ 🐾</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* B. Admin God Mode Actions */}
+                <div className="pt-2 border-t border-slate-850 space-y-4">
+                  <h4 className="text-xs font-bold text-red-400 flex items-center gap-1">
+                    <ShieldAlert className="w-4 h-4" />
+                    โหมดผู้ดูแลระบบสูงสุด (God Mode)
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Add point to all customers */}
+                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl space-y-3">
+                      <label className="text-[10px] font-bold text-slate-500 block">
+                        เพิ่มแต้มให้ลูกค้าทุกคนในระบบ
+                      </label>
+                      <div className="flex gap-2">
+                        <select
+                          value={godModePoints}
+                          onChange={(e) => setGodModePoints(Number(e.target.value))}
+                          className="px-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none text-slate-200 text-xs cursor-pointer appearance-none text-center"
+                        >
+                          {[1, 2, 3, 4, 5].map((v) => (
+                            <option key={v} value={v}>+{v} แต้ม</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleAdminAddPointsAll}
+                          disabled={processingGodMode}
+                          className="flex-1 py-2 bg-indigo-650 hover:bg-indigo-750 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5"
+                        >
+                          {processingGodMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          แจกทุกคน
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Reset points for all customers */}
+                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex flex-col justify-between space-y-3">
+                      <label className="text-[10px] font-bold text-slate-500 block">
+                        ล้างแต้มลูกค้าทุกคน (เป็น 0 แต้ม)
+                      </label>
+                      <button
+                        onClick={handleAdminResetAll}
+                        disabled={processingGodMode}
+                        className="w-full py-2 bg-red-650 hover:bg-red-750 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5"
+                      >
+                        {processingGodMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        ล้างแต้มลูกค้าทุกคน
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* Point History Ledger Log */}
+            <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/60 p-5 rounded-3xl flex flex-col space-y-4 text-left">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                  ประวัติธุรกรรมแต้มสะสม
+                </h3>
+                <button
+                  onClick={() => fetchHistory(1)}
+                  className="p-1.5 hover:bg-slate-800/80 border border-slate-850 rounded-xl text-slate-400 hover:text-slate-200 transition-all cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Filter Search bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2 relative">
+                  <Search className="w-4 h-4 text-slate-555 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="ค้นหาเบอร์โทรศัพท์ลูกค้า..."
+                    value={searchPhone}
+                    onChange={(e) => setSearchPhone(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-slate-950/40 border border-slate-850 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-550 text-xs transition-all focus:ring-1 focus:ring-indigo-500/20 font-semibold"
+                  />
+                </div>
+                <div className="relative">
+                  <select
+                    value={actionType}
+                    onChange={(e) => setActionType(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-950/40 border border-slate-850 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-100 text-xs transition-all cursor-pointer appearance-none font-semibold text-center"
+                  >
+                    <option value="">ทุกประเภท</option>
+                    <option value="EARN">สะสมแต้ม (EARN)</option>
+                    <option value="REDEEM">แลกของรางวัล (REDEEM)</option>
+                    <option value="RESET">ล้างแต้มทั้งหมด (RESET)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* History Table List */}
+              {loadingHistory ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                </div>
+              ) : history.length > 0 ? (
+                <div className="space-y-3 flex-1">
+                  {history.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex items-center justify-between gap-3 text-xs animate-fade-in"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-200">{tx.customerPhoneNumber}</span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                              tx.type === "EARN"
+                                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800"
+                                : tx.type === "REDEEM"
+                                ? "bg-violet-950/60 text-violet-400 border border-violet-800"
+                                : tx.type === "RESET"
+                                ? "bg-red-950/60 text-red-400 border border-red-800"
+                                : "bg-slate-900 text-slate-400 border border-slate-700"
+                            }`}
+                          >
+                            {tx.type}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          {new Date(tx.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="font-bold">
+                            {tx.currentChange !== 0 && (
+                              <span className={tx.currentChange > 0 ? "text-emerald-400" : "text-red-400"}>
+                                {tx.currentChange > 0 ? `+${tx.currentChange}` : tx.currentChange} แต้มปกติ
+                              </span>
+                            )}
+                            {tx.pendingChange !== 0 && (
+                              <span className={`block text-[10px] ${tx.pendingChange > 0 ? "text-indigo-400" : "text-amber-500"}`}>
+                                {tx.pendingChange > 0 ? `+${tx.pendingChange}` : tx.pendingChange} แต้มคิว
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            คงเหลือ: {tx.resultingCurrent} / {tx.resultingPending} แต้ม
+                          </div>
+                        </div>
+
+                        {tx.type !== "RESET" && (
+                          <button
+                            onClick={() => handleResetSingleCustomer(tx.customerId, tx.customerPhoneNumber)}
+                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-950/30 border border-slate-800 rounded-xl transition-all cursor-pointer"
+                            title="รีเซ็ตแต้มลูกค้ารายนี้"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Pagination Indicators */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-850">
+                      <button
+                        disabled={page <= 1}
+                        onClick={() => fetchHistory(page - 1)}
+                        className="px-3.5 py-1.5 bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        ก่อนหน้า
+                      </button>
+                      <span className="text-slate-500 text-xs">
+                        หน้า {page} จาก {totalPages}
+                      </span>
+                      <button
+                        disabled={page >= totalPages}
+                        onClick={() => fetchHistory(page + 1)}
+                        className="px-3.5 py-1.5 bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        ถัดไป
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-16 text-center space-y-2">
+                  <ArrowLeftRight className="w-10 h-10 text-slate-700 stroke-[1.5]" />
+                  <p className="text-xs text-slate-500">ไม่มีข้อมูลประวัติธุรกรรมที่ตรงกับเงื่อนไข</p>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
+
+      {/* =================================================================
+         CUSTOM REACT CONFIRMATION MODAL
+         ================================================================= */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-[#090a0f]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-xl space-y-4 animate-scale-up text-left">
+            <div className="flex items-start gap-3">
+              {confirmModal.danger ? (
+                <div className="p-2 bg-red-950/50 border border-red-500/30 rounded-xl text-red-400">
+                  <ShieldAlert className="w-6 h-6 animate-pulse" />
+                </div>
+              ) : (
+                <div className="p-2 bg-indigo-950/50 border border-indigo-500/30 rounded-xl text-indigo-400">
+                  <Award className="w-6 h-6 animate-bounce" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-200">{confirmModal.title}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">{confirmModal.message}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-350 rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.96]"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.96] ${
+                  confirmModal.danger 
+                    ? "bg-red-600 hover:bg-red-500 text-white" 
+                    : "bg-indigo-650 hover:bg-indigo-550 text-white"
+                }`}
+              >
+                ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

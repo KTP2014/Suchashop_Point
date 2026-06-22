@@ -1,40 +1,83 @@
 import { NextResponse } from "next/server";
-import { UserRepository } from "../../../../features/auth/repository/userRepository";
+import { secureRoute } from "../../../../features/auth/services/security";
+import { prisma } from "../../../../lib/prisma";
 import { AppError } from "../../../../lib/errors";
 import { logger } from "../../../../lib/logger";
-
-const userRepository = new UserRepository();
+import { Role } from "@prisma/client";
 
 export async function GET(request: Request) {
   try {
-    const customerId = request.headers.get("x-user-id");
+    // Authenticate user via secure DB lookup (allow all logged-in roles to query profile)
+    const user = await secureRoute([
+      Role.CUSTOMER,
+      Role.PENDING_APPROVAL,
+      Role.STAFF,
+      Role.ADMIN,
+      Role.MERCHANT,
+    ]);
 
-    if (!customerId) {
-      return NextResponse.json({
-        success: false,
-        code: "UNAUTHORIZED_ACCESS",
-        message: "Customer authentication is missing.",
-      }, { status: 401 });
+    const customerId = user.id;
+
+    // 1. TTL Cleanup: Delete expired OtpCodes globally to prevent DB bloat
+    await prisma.otpCode.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+
+    // 2. Fetch or Generate active 6-digit OTP code for the user
+    let otpCode = "";
+    const existingOtp = await prisma.otpCode.findFirst({
+      where: {
+        userId: customerId,
+        expiresAt: { gt: new Date(Date.now() + 30 * 1000) }, // Must have at least 30s of lifetime left
+      },
+    });
+
+    if (existingOtp) {
+      otpCode = existingOtp.code;
+    } else {
+      // Clear any outdated OTPs for this specific user
+      await prisma.otpCode.deleteMany({
+        where: { userId: customerId },
+      });
+
+      let attempts = 0;
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes validity
+
+      // Loop check to prevent generating active duplicate codes
+      while (attempts < 10) {
+        otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const duplicate = await prisma.otpCode.findFirst({
+          where: {
+            code: otpCode,
+            expiresAt: { gt: new Date() }, // Check if there's any active non-expired code matching
+          },
+        });
+
+        if (!duplicate) {
+          break;
+        }
+        attempts++;
+      }
+
+      await prisma.otpCode.create({
+        data: {
+          code: otpCode,
+          userId: customerId,
+          expiresAt,
+        },
+      });
     }
 
-    const customer = await userRepository.findById(customerId);
-
-    if (!customer) {
-      return NextResponse.json({
-        success: false,
-        code: "FORBIDDEN_RESOURCE",
-        message: "Customer account not found.",
-      }, { status: 403 });
-    }
-
-    const currentPoints = customer.currentPoints;
-    const pendingPoints = customer.pendingPoints;
+    const currentPoints = user.currentPoints;
+    const pendingPoints = user.pendingPoints;
 
     return NextResponse.json({
       success: true,
       currentPoints,
       pendingPoints,
       totalPoints: currentPoints + pendingPoints,
+      role: user.role,
+      otpCode,
     });
 
   } catch (error: any) {

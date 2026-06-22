@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { UserRepository } from "../../../../features/auth/repository/userRepository";
 import { signToken, JWTPayload } from "../../../../features/auth/services/jwt";
 import { cookies } from "next/headers";
 import { Role } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
-
-const userRepository = new UserRepository();
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +16,9 @@ export async function POST(request: Request) {
     }
 
     // Check if customer already exists in MongoDB
-    let user = await userRepository.findByLineUserId(lineUserId);
+    let user = await prisma.user.findFirst({
+      where: { lineUserId },
+    });
 
     if (!user) {
       // Auto-Register new LINE user with display name
@@ -41,6 +40,7 @@ export async function POST(request: Request) {
       });
     }
 
+    // v2.0 Sign token with the latest database role
     const payload: JWTPayload = {
       userId: user.id,
       phoneNumber: user.phoneNumber || "",
@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       user: {
         id: user.id,
         lineUserId: user.lineUserId,
+        role: user.role,
         currentPoints: user.currentPoints,
         pendingPoints: user.pendingPoints,
       } 

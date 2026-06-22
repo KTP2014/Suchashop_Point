@@ -7,18 +7,12 @@ import { Loader2, Phone, Calendar, Lock, UserCheck, ShieldAlert } from "lucide-r
 
 export default function LoginPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"customer" | "merchant">("customer");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // LIFF States
   const [liffInstance, setLiffInstance] = useState<any>(null);
   const [liffLoading, setLiffLoading] = useState(true);
-
-  // Form State
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [birthdate, setBirthdate] = useState("");
-  const [password, setPassword] = useState("");
 
   const processLiffLogin = async (liff: any) => {
     try {
@@ -91,59 +85,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
 
-    // Sanitize phone number (strip spaces, hyphens, and parentheses, keeping leading +)
-    let cleanedPhone = phoneNumber.replace(/[^0-9+]/g, "");
-    let formattedPhone = cleanedPhone;
-    if (!formattedPhone.startsWith("+")) {
-      if (formattedPhone.startsWith("0")) {
-        formattedPhone = "+66" + formattedPhone.substring(1);
-      } else {
-        formattedPhone = "+66" + formattedPhone;
-      }
-    }
-
-    // Sanitize birthdate (strip non-digit characters like slashes, dashes, or spaces)
-    const cleanedBirthdate = birthdate.replace(/[^0-9]/g, "");
-
-    const payload =
-      activeTab === "customer"
-        ? { phoneNumber: formattedPhone, birthdate: cleanedBirthdate }
-        : { phoneNumber: formattedPhone, password: password };
-
-    const endpoint =
-      activeTab === "customer"
-        ? "/api/auth/customer"
-        : "/api/auth/merchant";
-
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "ระบบไม่สามารถเข้าสู่ระบบได้ กรุณาตรวจสอบข้อมูล");
-      }
-
-      if (activeTab === "customer") {
-        router.push("/customer");
-      } else {
-        router.push("/merchant");
-      }
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <main className="h-[100dvh] max-h-[100dvh] bg-[#FFF5F6] flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none">
@@ -227,38 +169,6 @@ export default function LoginPage() {
               />
             </div>
 
-          {/* Tab Navigation */}
-          <div className="grid grid-cols-2 p-1 bg-[#F9F9F9] border border-pink-100/30 rounded-2xl mb-3.5">
-            <button
-              onClick={() => {
-                setActiveTab("customer");
-                setError(null);
-              }}
-              className={`py-2 text-xs font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === "customer"
-                  ? "bg-[#FF7DA0] text-white shadow-sm"
-                  : "text-slate-400 hover:text-[#5C5556]"
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              Customer
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("merchant");
-                setError(null);
-              }}
-              className={`py-2 text-xs font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === "merchant"
-                  ? "bg-[#FF7DA0] text-white shadow-sm"
-                  : "text-slate-400 hover:text-[#5C5556]"
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              Merchant
-            </button>
-          </div>
-
           {/* Form Error Banner */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2 text-red-600 text-xs animate-shake leading-relaxed">
@@ -267,80 +177,23 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Customer vs Merchant Forms */}
-          {activeTab === "customer" ? (
-            <div className="space-y-3 mb-2 mt-4">
-              <button
-                type="button"
-                onClick={handleLiffLogin}
-                disabled={liffLoading}
-                className="w-full py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.96] tracking-wide text-xs disabled:opacity-50"
-              >
-                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                  <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.586.39.084.922.258 1.057.592.12.3.077.769.038 1.073-.038.307-.184 1.23-.231 1.633-.072.631-.322 2.472 1.393 1.348 1.716-1.125 9.277-5.462 12.633-9.351 2.378-2.658 3.074-4.887 3.074-7.281zm-15.61 3.567h-2.113c-.29 0-.527-.236-.527-.528v-4.116c0-.291.237-.528.527-.528h2.113c.291 0 .528.237.528.528 0 .292-.237.528-.528.528h-1.585v1.268h1.585c.291 0 .528.237.528.528s-.237.528-.528.528h-1.585v1.268h1.585c.291 0 .528.237.528.528.001.292-.236.528-.528.528zm3.626 0c0 .292-.236.528-.527.528s-.528-.236-.528-.528v-4.116c0-.291.237-.528.528-.528s.527.237.527.528v4.116zm4.417 0h-2.112c-.29 0-.528-.236-.528-.528v-4.116c0-.291.238-.528.528-.528s.528.237.528.528v3.061l1.584-3.061c.102-.197.306-.322.528-.322.428 0 .668.468.455.84l-1.442 2.784.008.016 1.433.003c.29 0 .527.237.527.528 0 .292-.237.528-.527.528v-.003zm3.627 0h-2.112c-.29 0-.528-.236-.528-.528v-4.116c0-.291.238-.528.528-.528h2.112c.29 0 .528.237.528.528s-.238.528-.528.528h-1.584v.74h1.584c.29 0 .528.237.528.528s-.238.528-.528.528h-1.584v.739h1.584c.29 0 .528.237.528.528s-.238.528-.528.528z" />
-                </svg>
-                เข้าสู่ระบบด้วย LINE (Log in with LINE)
-              </button>
-              <p className="text-[9px] text-slate-400 text-center leading-normal mt-1">
-                สะสมแต้มอุ้งเท้าแมวแสนสะดวกผ่านบัญชี LINE ของคุณ 🐾
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-3 mb-2">
-              
-              {/* Phone Number Input */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  เบอร์โทรศัพท์ (Phone Number)
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    required
-                    placeholder="ตัวอย่าง 0812345678"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-[#F9F9F9] border border-pink-100 rounded-2xl focus:outline-none focus:border-[#FF7DA0] text-[#5C5556] placeholder-slate-400 text-xs transition-all focus:ring-2 focus:ring-[#FF7DA0]/10"
-                  />
-                </div>
-              </div>
-
-              {/* Password Input for Merchant */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  รหัสผ่าน (Password)
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="ป้อนรหัสผ่านของคุณ"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-[#F9F9F9] border border-pink-100 rounded-2xl focus:outline-none focus:border-[#FF7DA0] text-[#5C5556] placeholder-slate-400 text-xs transition-all focus:ring-2 focus:ring-[#FF7DA0]/10"
-                  />
-                </div>
-              </div>
-
-              {/* Solid Matte Pastel Pink Button in Minimalist Style */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 mt-2 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.96] uppercase tracking-widest text-xs"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4.5 h-4.5 animate-spin" />
-                    LOADING...
-                  </>
-                ) : (
-                  "LOGIN"
-                )}
-              </button>
-            </form>
-          )}
+          {/* LINE login button */}
+          <div className="space-y-3 mb-2 mt-4">
+            <button
+              type="button"
+              onClick={handleLiffLogin}
+              disabled={liffLoading}
+              className="w-full py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-300 active:scale-[0.96] tracking-wide text-xs disabled:opacity-50"
+            >
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.586.39.084.922.258 1.057.592.12.3.077.769.038 1.073-.038.307-.184 1.23-.231 1.633-.072.631-.322 2.472 1.393 1.348 1.716-1.125 9.277-5.462 12.633-9.351 2.378-2.658 3.074-4.887 3.074-7.281zm-15.61 3.567h-2.113c-.29 0-.527-.236-.527-.528v-4.116c0-.291.237-.528.527-.528h2.113c.291 0 .528.237.528.528 0 .292-.237.528-.528.528h-1.585v1.268h1.585c.291 0 .528.237.528.528s-.237.528-.528.528h-1.585v1.268h1.585c.291 0 .528.237.528.528.001.292-.236.528-.528.528zm3.626 0c0 .292-.236.528-.527.528s-.528-.236-.528-.528v-4.116c0-.291.237-.528.528-.528s.527.237.527.528v4.116zm4.417 0h-2.112c-.29 0-.528-.236-.528-.528v-4.116c0-.291.238-.528.528-.528s.528.237.528.528v3.061l1.584-3.061c.102-.197.306-.322.528-.322.428 0 .668.468.455.84l-1.442 2.784.008.016 1.433.003c.29 0 .527.237.527.528 0 .292-.237.528-.527.528v-.003zm3.627 0h-2.112c-.29 0-.528-.236-.528-.528v-4.116c0-.291.238-.528.528-.528h2.112c.29 0 .528.237.528.528s-.238.528-.528.528h-1.584v.74h1.584c.29 0 .528.237.528.528s-.238.528-.528.528h-1.584v.739h1.584c.29 0 .528.237.528.528s-.238.528-.528.528z" />
+              </svg>
+              เข้าสู่ระบบด้วย LINE (Log in with LINE)
+            </button>
+            <p className="text-[9px] text-slate-400 text-center leading-normal mt-1">
+              สะสมแต้มอุ้งเท้าแมวแสนสะดวกผ่านบัญชี LINE ของคุณ 🐾
+            </p>
+          </div>
 
           {/* =================================================================
              CUTE STICKER: ANIMATED ORANGE CAT SITTING BACKWARDS AT BOTTOM-LEFT (INSIDE CARD, MOVED INWARD TO PREVENT CLIP)

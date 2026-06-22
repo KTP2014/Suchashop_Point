@@ -14,7 +14,8 @@ const ApproveStaffSchema = z.object({
 export async function POST(request: Request) {
   try {
     // Authenticate caller: strictly check if caller is an ADMIN in MongoDB
-    await secureRoute([Role.ADMIN]);
+    const caller = await secureRoute([Role.ADMIN]);
+    const callerId = caller.id;
 
     const body = await request.json();
     const parsed = ApproveStaffSchema.safeParse(body);
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
 
     const { userId, approvedRole } = parsed.data;
 
-    // Check if target user exists and is pending
+    // Check if target user exists
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -38,15 +39,24 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: false,
         code: "USER_NOT_FOUND",
-        message: "ไม่พบผู้ใช้ที่ต้องการอนุมัติ",
+        message: "ไม่พบผู้ใช้ที่ต้องการจัดตั้งบทบาท",
       }, { status: 404 });
     }
 
-    if (targetUser.role !== Role.PENDING_APPROVAL) {
+    if (targetUser.role !== Role.PENDING_APPROVAL && targetUser.role !== Role.STAFF && targetUser.role !== Role.ADMIN) {
       return NextResponse.json({
         success: false,
         code: "INVALID_USER_STATE",
-        message: "ผู้ใช้งานรายนี้ไม่ได้อยู่ในสถานะรอการอนุมัติสิทธิ์",
+        message: "ไม่สามารถเปลี่ยนบทบาทของผู้ใช้งานรายนี้ได้",
+      }, { status: 400 });
+    }
+
+    // Safety: prevent self-demotion/self-removal of ADMIN role
+    if (userId === callerId && approvedRole !== "ADMIN") {
+      return NextResponse.json({
+        success: false,
+        code: "SELF_DEMOTION_BLOCKED",
+        message: "ไม่สามารถลดสิทธิ์หรือถอดสิทธิ์ของตัวเองได้เพื่อความปลอดภัยในการเข้าถึงระบบดูแลร้านค้า",
       }, { status: 400 });
     }
 
@@ -63,11 +73,11 @@ export async function POST(request: Request) {
       data: { role: nextRole },
     });
 
-    logger.info("STAFF_APPROVED", { targetUserId: userId, approvedRole });
+    logger.info("STAFF_ROLE_MUTATED", { targetUserId: userId, approvedRole, nextRole });
 
     return NextResponse.json({
       success: true,
-      message: approvedRole === "REJECT" ? "ปฏิเสธคำขอสิทธิ์เรียบร้อยแล้ว" : "อนุมัติสิทธิ์พนักงานเรียบร้อยแล้ว",
+      message: approvedRole === "REJECT" ? "ถอดถอนสิทธิ์เรียบร้อยแล้ว" : "ปรับเปลี่ยนสิทธิ์พนักงานเรียบร้อยแล้ว",
     });
 
   } catch (error: any) {

@@ -82,7 +82,7 @@ export class PointsMutationService {
             where: { id: customerId },
           });
 
-          if (!customer || customer.role !== Role.CUSTOMER) {
+          if (!customer || (customer.role !== Role.CUSTOMER && customer.role !== Role.STAFF && customer.role !== Role.ADMIN)) {
             throw new ValidationError("Target user is not a valid customer.");
           }
 
@@ -231,7 +231,7 @@ export class PointsMutationService {
             where: { id: customerId },
           });
 
-          if (!user || user.role !== Role.CUSTOMER) {
+          if (!user || (user.role !== Role.CUSTOMER && user.role !== Role.STAFF && user.role !== Role.ADMIN)) {
             throw new ValidationError("User is not a valid customer.");
           }
 
@@ -321,7 +321,7 @@ export class PointsMutationService {
         where: { id: customerId },
       });
 
-      if (!user || user.role !== Role.CUSTOMER) {
+      if (!user || (user.role !== Role.CUSTOMER && user.role !== Role.STAFF && user.role !== Role.ADMIN)) {
         throw new ValidationError("User is not a valid customer.");
       }
 
@@ -375,7 +375,7 @@ export class PointsMutationService {
         where: { id: customerId },
       });
 
-      if (!user || user.role !== Role.CUSTOMER) {
+      if (!user || (user.role !== Role.CUSTOMER && user.role !== Role.STAFF && user.role !== Role.ADMIN)) {
         throw new ValidationError("User is not a valid customer.");
       }
 

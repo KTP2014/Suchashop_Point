@@ -69,8 +69,8 @@ export async function POST(request: Request) {
       where: { id: customerId },
     });
 
-    if (!customer || customer.role !== Role.CUSTOMER) {
-      throw new ValidationError("บัญชีผู้ใช้ไม่ใช่ลูกค้าทั่วไป");
+    if (!customer || (customer.role !== Role.CUSTOMER && customer.role !== Role.STAFF && customer.role !== Role.ADMIN)) {
+      throw new ValidationError("บัญชีผู้ใช้งานไม่อยู่ในระบบสะสมแต้ม");
     }
 
     // 5. Process Points Mutation based on Action Type

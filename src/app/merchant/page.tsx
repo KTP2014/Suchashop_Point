@@ -80,6 +80,10 @@ export default function MerchantDashboard() {
   const [pendingStaff, setPendingStaff] = useState<PendingStaffItem[]>([]);
   const [loadingPendingStaff, setLoadingPendingStaff] = useState(false);
 
+  // Admin Staff Management List State
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [loadingStaffMembers, setLoadingStaffMembers] = useState(false);
+
   // Admin God Mode State
   const [godModePoints, setGodModePoints] = useState<number>(1);
   const [processingGodMode, setProcessingGodMode] = useState(false);
@@ -117,6 +121,7 @@ export default function MerchantDashboard() {
           setLoadingUser(false);
           if (data.role === "ADMIN") {
             fetchPendingStaff();
+            fetchStaffList();
           }
         } else {
           router.push("/customer");
@@ -144,14 +149,31 @@ export default function MerchantDashboard() {
     }
   };
 
+  const fetchStaffList = async () => {
+    setLoadingStaffMembers(true);
+    try {
+      const res = await fetch("/api/merchant/staff-list");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setStaffMembers(data.users || []);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch staff list:", err);
+    } finally {
+      setLoadingStaffMembers(false);
+    }
+  };
+
   const handleApproveStaff = async (userId: string, approvedRole: "STAFF" | "ADMIN" | "REJECT", displayName: string) => {
     let actionLabel = "";
-    if (approvedRole === "STAFF") actionLabel = "อนุมัติเป็นพนักงาน";
-    if (approvedRole === "ADMIN") actionLabel = "อนุมัติเป็นผู้ดูแลระบบ";
-    if (approvedRole === "REJECT") actionLabel = "ปฏิเสธคำขอสมัคร";
+    if (approvedRole === "STAFF") actionLabel = "ตั้งค่าเป็นพนักงาน (Staff)";
+    if (approvedRole === "ADMIN") actionLabel = "ตั้งค่าเป็นผู้ดูแลระบบ (Admin)";
+    if (approvedRole === "REJECT") actionLabel = "ถอดถอนสิทธิ์การใช้งานเป็นลูกค้า";
 
     triggerConfirm(
-      "ยืนยันการทำรายการอนุมัติสิทธิ์",
+      "ยืนยันการทำรายการปรับบทบาทผู้ใช้งาน",
       `คุณต้องการทำการ [${actionLabel}] ให้กับคุณ ${displayName} ใช่หรือไม่?`,
       async () => {
         setError(null);
@@ -164,12 +186,13 @@ export default function MerchantDashboard() {
           });
           const data = await res.json();
           if (!res.ok || !data.success) {
-            throw new Error(data.message || "การอนุมัติสิทธิ์พนักงานล้มเหลว");
+            throw new Error(data.message || "การทำรายการปรับบทบาทล้มเหลว");
           }
           setSuccess(`ทำรายการ [${actionLabel}] ให้กับคุณ ${displayName} สำเร็จ!`);
           await fetchPendingStaff();
+          await fetchStaffList();
         } catch (err: any) {
-          setError(err.message || "เกิดข้อผิดพลาดในการทำรายการอนุมัติสิทธิ์");
+          setError(err.message || "เกิดข้อผิดพลาดในการทำรายการปรับบทบาท");
         }
       }
     );
@@ -872,8 +895,77 @@ export default function MerchantDashboard() {
                   )}
                 </div>
 
-                {/* B. Admin God Mode Actions */}
-                <div className="pt-2 border-t border-slate-850 space-y-4">
+                {/* B. Staff Management Panel */}
+                <div className="pt-4 border-t border-slate-850 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-350">
+                    รายชื่อพนักงานในระบบทั้งหมด
+                  </h4>
+
+                  {loadingStaffMembers ? (
+                    <div className="py-4 text-center">
+                      <Loader2 className="w-5 h-5 text-amber-500 animate-spin mx-auto" />
+                    </div>
+                  ) : staffMembers.length > 0 ? (
+                    <div className="space-y-3">
+                      {staffMembers.map((staff) => (
+                        <div 
+                          key={staff.id} 
+                          className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="space-y-1">
+                            <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                              {staff.displayName || "ไม่ระบุชื่อ"}
+                              {staff.role === "ADMIN" ? (
+                                <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded text-[9px] font-bold">
+                                  ADMIN
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded text-[9px] font-bold">
+                                  STAFF
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 leading-normal">
+                              เบอร์โทร: {staff.phoneNumber || "ไม่มี"}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-1.5 self-end sm:self-center">
+                            {staff.role === "STAFF" && (
+                              <button
+                                onClick={() => handleApproveStaff(staff.id, "ADMIN", staff.displayName || "ไม่ระบุชื่อ")}
+                                className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/30 text-amber-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.95]"
+                              >
+                                แต่งตั้งเป็น Admin
+                              </button>
+                            )}
+                            {staff.role === "ADMIN" && (
+                              <button
+                                onClick={() => handleApproveStaff(staff.id, "STAFF", staff.displayName || "ไม่ระบุชื่อ")}
+                                className="px-2.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.95]"
+                              >
+                                ลดระดับเป็น Staff
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleApproveStaff(staff.id, "REJECT", staff.displayName || "ไม่ระบุชื่อ")}
+                              className="px-2.5 py-1.5 bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-[0.95]"
+                            >
+                              ถอดสิทธิ์พนักงาน
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-950/20 border border-dashed border-slate-850 rounded-2xl text-center">
+                      <p className="text-xs text-slate-500">ไม่มีพนักงานในระบบ 🐾</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* C. Admin God Mode Actions */}
+                <div className="pt-4 border-t border-slate-850 space-y-4">
                   <h4 className="text-xs font-bold text-red-400 flex items-center gap-1">
                     <ShieldAlert className="w-4 h-4" />
                     โหมดผู้ดูแลระบบสูงสุด (God Mode)

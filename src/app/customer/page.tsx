@@ -40,9 +40,8 @@ export default function CustomerDashboard() {
   // LIFF State
   const [liffInstance, setLiffInstance] = useState<any>(null);
 
-  // Manual Input State (For Camera-less testing)
-  const [manualToken, setManualToken] = useState("");
-  const [claimingManual, setClaimingManual] = useState(false);
+  // Toggle State to show/hide 6-digit OTP code
+  const [showOtpCode, setShowOtpCode] = useState(false);
 
   // Redemption QR Code State
   const [activeRedeemToken, setActiveRedeemToken] = useState<string | null>(null);
@@ -231,14 +230,7 @@ export default function CustomerDashboard() {
     }
   };
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualToken.trim()) return;
-    setClaimingManual(true);
-    await processScannedToken(manualToken.trim());
-    setManualToken("");
-    setClaimingManual(false);
-  };
+
 
   const processScannedToken = async (token: string) => {
     setLoading(true);
@@ -545,16 +537,33 @@ export default function CustomerDashboard() {
 
             {/* OTP Code Display Container */}
             {profile?.otpCode && (
-              <div className="w-full mt-5 bg-[#FCF8F9] border border-pink-100/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-1 shadow-sm">
-                <span className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
-                  รหัสสะสมแต้มชั่วคราว (6 หลัก)
-                </span>
-                <span className="text-3xl font-extrabold text-[#FF7DA0] tracking-wider font-mono">
-                  {formatOtp(profile.otpCode)}
-                </span>
-                <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                  มีอายุ 5 นาที • บอกรหัสนี้กับร้านค้าเมื่อไม่มีกล้องสำหรับสแกน
-                </p>
+              <div className="w-full mt-4 flex flex-col items-center justify-center">
+                {!showOtpCode ? (
+                  <button
+                    onClick={() => setShowOtpCode(true)}
+                    className="py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.98] w-full"
+                  >
+                    แสดงรหัสสะสมแต้มสำหรับกรณีกล้องมีปัญหา
+                  </button>
+                ) : (
+                  <div className="w-full bg-[#FCF8F9] border border-pink-100/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-1 shadow-sm relative">
+                    <button
+                      onClick={() => setShowOtpCode(false)}
+                      className="absolute top-2 right-2 text-slate-400 hover:text-[#FF7DA0] text-[10px] cursor-pointer"
+                    >
+                      ซ่อน
+                    </button>
+                    <span className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
+                      รหัสสะสมแต้มชั่วคราว (6 หลัก)
+                    </span>
+                    <span className="text-3xl font-extrabold text-[#FF7DA0] tracking-wider font-mono">
+                      {formatOtp(profile.otpCode)}
+                    </span>
+                    <p className="text-[9px] text-slate-400 font-semibold leading-normal">
+                      มีอายุ 5 นาที • บอกรหัสนี้กับร้านค้าเมื่อไม่มีกล้องสำหรับสแกน
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -594,34 +603,7 @@ export default function CustomerDashboard() {
           </button>
         )}
 
-        {/* Manual Test Token Fallback Container */}
-        {!redeemQrUrl && (
-          <div className="bg-[#FFFFFF] border border-pink-100/50 p-5 rounded-2xl space-y-3 shadow-sm text-left">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C5556] block">
-              เครื่องมือเคลมแต้มสำหรับทดสอบ (ไม่ต้องใช้กล้อง)
-            </label>
-            <form onSubmit={handleManualSubmit} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="วางโค้ดสะสมแต้ม 64 หลักจากฝั่งร้านค้าที่นี่..."
-                value={manualToken}
-                onChange={(e) => setManualToken(e.target.value)}
-                className="flex-1 px-3 py-2 bg-[#F9F9F9] border border-pink-100/30 rounded-xl focus:outline-none focus:border-[#FF7DA0] text-[#5C5556] placeholder-slate-400 text-xs transition-all"
-              />
-              <button
-                type="submit"
-                disabled={claimingManual || !manualToken.trim()}
-                className="px-3.5 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-default flex items-center justify-center transition-all"
-              >
-                {claimingManual ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </form>
-          </div>
-        )}
+
 
         {/* Footer Link: Apply Staff Role */}
         <div className="flex justify-center pt-2">

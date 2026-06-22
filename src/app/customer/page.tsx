@@ -118,6 +118,16 @@ export default function CustomerDashboard() {
     initLiff();
   }, [router]);
 
+  // Redirect admin or staff to merchant dashboard unless testing the customer view
+  useEffect(() => {
+    if (profile && (profile.role === "ADMIN" || profile.role === "STAFF" || profile.role === "MERCHANT")) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("test") !== "true") {
+        router.push("/merchant");
+      }
+    }
+  }, [profile, router]);
+
   // Countdown timer for Customer Redemption Coupon QR
   useEffect(() => {
     if (redeemTtl <= 0) {

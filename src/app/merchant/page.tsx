@@ -529,7 +529,7 @@ export default function MerchantDashboard() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => router.push("/customer")}
+              onClick={() => router.push("/customer?test=true")}
               className="px-3.5 py-2 text-xs font-bold text-slate-350 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/40 rounded-xl transition-all cursor-pointer"
             >
               หน้าลูกค้า (Test)

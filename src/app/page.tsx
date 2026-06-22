@@ -20,6 +20,43 @@ export default function LoginPage() {
   const [birthdate, setBirthdate] = useState("");
   const [password, setPassword] = useState("");
 
+  const processLiffLogin = async (liff: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const profile = await liff.getProfile();
+      const lineUserId = profile.userId;
+      const displayName = profile.displayName;
+
+      // Call liff-login endpoint to set session cookie
+      const res = await fetch("/api/auth/liff-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineUserId, displayName }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const role = data.user?.role;
+        
+        // Explicitly route to merchant if ADMIN/STAFF/MERCHANT, else to customer (which includes CUSTOMER/PENDING_APPROVAL)
+        if (role === "ADMIN" || role === "STAFF" || role === "MERCHANT") {
+          router.push("/merchant");
+        } else {
+          router.push("/customer");
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "การเข้าสู่ระบบ LIFF ล้มเหลว");
+      }
+    } catch (err: any) {
+      console.error("LIFF login processing failed", err);
+      setError(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อล็อกอินกับระบบ");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const initLiff = async () => {
       try {
@@ -35,26 +72,7 @@ export default function LoginPage() {
         setLiffLoading(false);
 
         if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          const lineUserId = profile.userId;
-          const displayName = profile.displayName;
-
-          // Call liff-login endpoint to set session cookie
-          const res = await fetch("/api/auth/liff-login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lineUserId, displayName }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const role = data.user?.role;
-            if (role === "ADMIN" || role === "STAFF" || role === "MERCHANT") {
-              router.push("/merchant");
-            } else {
-              router.push("/customer");
-            }
-          }
+          await processLiffLogin(liff);
         }
       } catch (err) {
         console.error("LIFF initialization failed", err);
@@ -64,12 +82,12 @@ export default function LoginPage() {
     initLiff();
   }, [router]);
 
-  const handleLiffLogin = () => {
+  const handleLiffLogin = async () => {
     if (!liffInstance) return;
     if (!liffInstance.isLoggedIn()) {
       liffInstance.login();
     } else {
-      router.push("/customer");
+      await processLiffLogin(liffInstance);
     }
   };
 

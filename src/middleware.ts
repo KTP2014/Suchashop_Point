@@ -32,11 +32,13 @@ export async function middleware(request: NextRequest) {
       const { payload } = await jwtVerify(token, getSecretBytes());
       const role = payload.role as string;
 
-      if (isCustomerRoute && role !== "CUSTOMER") {
+      // 🟢 1. แก้ไขฝั่งเส้นทางลูกค้า: ยอมให้คนที่มีสถานะ PENDING_APPROVAL เข้ามาดูหน้าคั่นรอได้ด้วย
+      if (isCustomerRoute && role !== "CUSTOMER" && role !== "PENDING_APPROVAL") {
         return handleUnauthorized(request, "Access restricted to Customers.");
       }
 
-      if (isMerchantRoute && role !== "MERCHANT") {
+      // 🟢 2. แก้ไขฝั่งเส้นทางร้านค้า: เปิดประตูเมืองให้ระดับ ADMIN และ STAFF ผ่านเข้าไปได้ด้วย!
+      if (isMerchantRoute && role !== "MERCHANT" && role !== "STAFF" && role !== "ADMIN") {
         return handleUnauthorized(request, "Access restricted to Merchants.");
       }
 

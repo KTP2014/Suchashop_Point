@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       })
     );
 
-    for (let x = 0; x <= maxPoints; x++) {
+    for (let x = maxPoints; x >= 0; x--) {
       const currentOld = x;
       let currentNew = currentOld + points;
       let overflow = 0;

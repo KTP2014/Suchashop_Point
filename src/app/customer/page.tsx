@@ -41,7 +41,6 @@ export default function CustomerDashboard() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ message: msg, type });
-    // Keep it readable but auto-dim after 4s
     const timer = setTimeout(() => setToast({ message: "", type: null }), 4000);
     return timer;
   };
@@ -58,6 +57,16 @@ export default function CustomerDashboard() {
   const [redeemTtl, setRedeemTtl] = useState(0);
   const [generatingRedeem, setGeneratingRedeem] = useState(false);
   const [copiedRedeem, setCopiedRedeem] = useState(false);
+
+  // v3.0 Dynamic Config States
+  interface Reward {
+    id: string;
+    name: string;
+    points: number;
+  }
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [announcement, setAnnouncement] = useState<string>("");
+  const [selectedReward, setSelectedReward] = useState<Reward | null>(null);
 
   // Scanning UI triggers
   const [scanning, setScanning] = useState(false);
@@ -84,12 +93,14 @@ export default function CustomerDashboard() {
             setActiveRedeemToken(null);
             setRedeemQrUrl(null);
             setRedeemTtl(0);
+            setSelectedReward(null);
             await fetchProfile();
           } else if (data.success && data.status === "EXPIRED") {
             showToast("⚠️ คูปองหมดอายุแล้ว", "error");
             setActiveRedeemToken(null);
             setRedeemQrUrl(null);
             setRedeemTtl(0);
+            setSelectedReward(null);
           }
         }
       } catch (err) {
@@ -101,6 +112,21 @@ export default function CustomerDashboard() {
       clearInterval(intervalId);
     };
   }, [activeRedeemToken]);
+
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch("/api/merchant/config");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setRewards(data.rewards || []);
+          setAnnouncement(data.announcement || "");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch shop configuration:", err);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -149,6 +175,7 @@ export default function CustomerDashboard() {
 
         setSyncingSession(false);
         await fetchProfile();
+        await fetchConfig(); // Load rewards and announcement on load
       } catch (err) {
         console.error("LIFF initialization failed on customer dashboard", err);
         setError("เกิดข้อผิดพลาดในการเชื่อมต่อ LINE LIFF");
@@ -173,6 +200,7 @@ export default function CustomerDashboard() {
     if (redeemTtl <= 0) {
       setActiveRedeemToken(null);
       setRedeemQrUrl(null);
+      setSelectedReward(null);
       return;
     }
     const timer = setInterval(() => {
@@ -189,8 +217,11 @@ export default function CustomerDashboard() {
     router.push("/");
   };
 
-  const handleGenerateRedeemQR = async () => {
-    if (!profile || profile.currentPoints !== 5) return;
+  const handleGenerateRedeemQR = async (reward: Reward) => {
+    const totalPoints = (profile?.currentPoints ?? 0) + (profile?.pendingPoints ?? 0);
+    if (totalPoints < reward.points) return;
+    
+    setSelectedReward(reward);
     setGeneratingRedeem(true);
     setError(null);
     setSuccessMsg(null);
@@ -199,6 +230,12 @@ export default function CustomerDashboard() {
     try {
       const res = await fetch("/api/customer/generate-redeem-qr", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rewardId: reward.id,
+          rewardPoints: reward.points,
+          rewardName: reward.name,
+        }),
       });
       const data = await res.json();
 
@@ -224,6 +261,7 @@ export default function CustomerDashboard() {
       setRedeemTtl(300); // 5 Minutes
     } catch (err: any) {
       setError(err.message || "ไม่สามารถขอคูปองแลกของรางวัลได้");
+      setSelectedReward(null);
     } finally {
       setGeneratingRedeem(false);
     }
@@ -457,12 +495,23 @@ export default function CustomerDashboard() {
 
         {/* Redemption Coupon QR Card (Displays when active) */}
         {redeemQrUrl && activeRedeemToken ? (
-          <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center space-y-4 animate-fade-in">
+          <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center space-y-4 animate-fade-in text-left">
             <h3 className="text-sm font-bold uppercase tracking-wider text-[#5C5556] flex items-center gap-1.5 self-start">
               <Gift className="w-4 h-4 text-[#FF7DA0] animate-bounce" />
               คูปองแลกรับของรางวัล
             </h3>
             
+            <div className="w-full bg-[#FCF8F9] border border-pink-100/20 rounded-2xl p-4 space-y-2">
+              <div className="text-xs text-slate-500 font-semibold flex justify-between">
+                <span>ของรางวัล:</span>
+                <span className="text-[#FF7DA0] font-bold">{selectedReward?.name || "ของรางวัล"}</span>
+              </div>
+              <div className="text-xs text-slate-500 font-semibold flex justify-between">
+                <span>คะแนนที่ใช้แลก:</span>
+                <span className="text-slate-800 font-bold">{selectedReward?.points ?? 5} คะแนน</span>
+              </div>
+            </div>
+
             <div className="p-3 bg-[#F9F9F9] border border-pink-100/30 rounded-2xl shadow-inner">
               <img src={redeemQrUrl} alt="คูปอง QR Code สำหรับแลกของรางวัล" className="w-52 h-52 rounded-xl" />
             </div>
@@ -478,124 +527,155 @@ export default function CustomerDashboard() {
               onClick={() => {
                 setActiveRedeemToken(null);
                 setRedeemQrUrl(null);
+                setSelectedReward(null);
               }}
-              className="w-full py-2 bg-[#F9F9F9] border border-pink-100/30 hover:bg-[#FFE2E6]/30 text-slate-500 hover:text-[#5C5556] rounded-xl text-xs font-semibold cursor-pointer transition-all"
+              className="w-full py-3 bg-[#F9F9F9] border border-pink-100/30 hover:bg-[#FFE2E6]/30 text-slate-500 hover:text-[#5C5556] rounded-xl text-xs font-semibold cursor-pointer transition-all"
             >
               ยกเลิกคูปอง
             </button>
           </div>
         ) : (
-          /* v2.0 Redesigned Cat Stamp Card Dashboard */
-          <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-            
-            <div className="absolute top-4 right-4 flex items-center gap-1 px-2.5 py-1 bg-[#F9F9F9] border border-pink-100/30 rounded-xl text-xs text-slate-400 hover:text-[#5C5556] cursor-pointer transition-all" onClick={fetchProfile}>
-              <RefreshCw className="w-3 h-3" />
-              รีเฟรช
-            </div>
- 
-            <h2 className="text-xs font-bold uppercase tracking-wider text-[#5C5556] mb-4 self-start">
-              บัตรสะสมแต้มอุ้งเท้าแมว 🐾
-            </h2>
- 
-            {/* Stamp Card Grid (5-column Cat Paw Stamp Slots with pop and pulse micro-interactions) */}
-            <div className="w-full bg-[#FCF8F9] border border-pink-100/30 rounded-2xl p-4 flex flex-col items-center space-y-4 mb-4 shadow-inner">
-              <div className="grid grid-cols-5 gap-3 w-full max-w-[280px]">
-                {[...Array(5)].map((_, i) => (
-                  <div 
-                    key={i} 
-                    className={`aspect-square rounded-xl flex items-center justify-center border transition-all duration-300 ${
-                      i < currentPoints 
-                        ? "bg-[#FFF0E5]/60 border-pink-200 shadow-sm animate-paw-pop" 
-                        : "bg-white/80 border-slate-100"
-                    }`}
-                  >
-                    <CatPaw 
-                      active={i < currentPoints} 
-                      className={`w-8 h-8 ${i < currentPoints ? "animate-paw-active" : ""}`} 
-                    />
-                  </div>
-                ))}
+          <>
+            {/* 1. Points Dashboard Card */}
+            <div className="bg-[#FFFFFF] border border-pink-100/50 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-center relative overflow-hidden text-left">
+              
+              <div className="absolute top-4 right-4 flex items-center gap-1 px-2.5 py-1 bg-[#F9F9F9] border border-pink-100/30 rounded-xl text-xs text-slate-400 hover:text-[#5C5556] cursor-pointer transition-all animate-pulse" onClick={async () => { await fetchProfile(); await fetchConfig(); }}>
+                <RefreshCw className="w-3 h-3" />
+                รีเฟรช
               </div>
-              <p className="text-[10px] text-slate-500 font-semibold">
-                {currentPoints === 5 
-                  ? "สะสมแต้มครบแล้ว! กดสร้างคูปองแลกรางวัลได้ทันที 🎉"
-                  : `สะสมอีก ${5 - currentPoints} แต้ม เพื่อแลกของรางวัลสุดพิเศษ! 🎁`
-                }
-              </p>
-            </div>
+   
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-450 mb-1 self-start">
+                ยอดคะแนนสะสมทั้งหมดของคุณ
+              </h2>
 
-            {/* Summary Statistics Layout */}
-            <div className="w-full grid grid-cols-2 gap-4 mt-2 pt-4 border-t border-pink-100/30">
-              <div className="flex flex-col items-center border-r border-pink-100/30">
-                <span className="text-[10px] text-slate-450 flex items-center gap-1 font-semibold">
-                  <TrendingUp className="w-3.5 h-3.5 text-[#FF7DA0]" />
-                  แต้มรอเข้าคิว (Overflow)
+              <div className="w-full flex flex-col items-center justify-center py-5 bg-gradient-to-tr from-[#FFF5F6] to-[#FFF0F2] border border-pink-100/30 rounded-2xl shadow-inner mb-4">
+                <span className="text-5xl font-extrabold text-[#FF7DA0] font-sans tracking-tight">
+                  {(profile?.currentPoints ?? 0) + (profile?.pendingPoints ?? 0)}
                 </span>
-                <span className="text-base font-bold text-[#5C5556] mt-0.5">
-                  {pendingPoints} แต้ม
+                <span className="text-[10px] text-[#FF7DA0]/80 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                  คะแนนพร้อมใช้สะสม
                 </span>
               </div>
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] text-slate-450 flex items-center gap-1 font-semibold">
-                  <Smartphone className="w-3.5 h-3.5 text-[#FF7DA0]" />
-                  แต้มสะสมทั้งหมด
-                </span>
-                <span className="text-base font-bold text-[#5C5556] mt-0.5">
-                  {profile?.totalPoints ?? 0} แต้ม
-                </span>
-              </div>
-            </div>
 
-            {/* OTP Code Display Container */}
-            {profile?.otpCode && (
-              <div className="w-full mt-4 flex flex-col items-center justify-center">
-                {!showOtpCode ? (
-                  <button
-                    onClick={() => setShowOtpCode(true)}
-                    className="py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.98] w-full"
-                  >
-                    แสดงรหัสสะสมแต้มสำหรับกรณีกล้องมีปัญหา
-                  </button>
-                ) : (
-                  <div className="w-full bg-[#FCF8F9] border border-pink-100/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-1 shadow-sm relative">
+              {/* Points Details Breakdown */}
+              <div className="w-full grid grid-cols-2 gap-4 pt-4 border-t border-pink-100/20">
+                <div className="flex flex-col items-center border-r border-pink-100/20">
+                  <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                    คะแนนสะสมหลัก
+                  </span>
+                  <span className="text-sm font-bold text-slate-700 mt-0.5">
+                    {profile?.currentPoints ?? 0} คะแนน
+                  </span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                    คะแนนสะสมคิว
+                  </span>
+                  <span className="text-sm font-bold text-slate-700 mt-0.5">
+                    {profile?.pendingPoints ?? 0} คะแนน
+                  </span>
+                </div>
+              </div>
+
+              {/* OTP Code Display Container */}
+              {profile?.otpCode && (
+                <div className="w-full mt-4 flex flex-col items-center justify-center">
+                  {!showOtpCode ? (
                     <button
-                      onClick={() => setShowOtpCode(false)}
-                      className="absolute top-2 right-2 text-slate-400 hover:text-[#FF7DA0] text-[10px] cursor-pointer"
+                      onClick={() => setShowOtpCode(true)}
+                      className="py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.98] w-full"
                     >
-                      ซ่อน
+                      แสดงรหัสสะสมแต้มสำหรับกรณีกล้องมีปัญหา
                     </button>
-                    <span className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
-                      รหัสสะสมแต้มชั่วคราว (6 หลัก)
-                    </span>
-                    <span className="text-3xl font-extrabold text-[#FF7DA0] tracking-wider font-mono">
-                      {formatOtp(profile.otpCode)}
-                    </span>
-                    <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                      มีอายุ 5 นาที • บอกรหัสนี้กับร้านค้าเมื่อไม่มีกล้องสำหรับสแกน
-                    </p>
-                  </div>
-                )}
+                  ) : (
+                    <div className="w-full bg-[#FCF8F9] border border-pink-100/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-1 shadow-sm relative">
+                      <button
+                        onClick={() => setShowOtpCode(false)}
+                        className="absolute top-2 right-2 text-slate-400 hover:text-[#FF7DA0] text-[10px] cursor-pointer"
+                      >
+                        ซ่อน
+                      </button>
+                      <span className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
+                        รหัสสะสมแต้มชั่วคราว (6 หลัก)
+                      </span>
+                      <span className="text-3xl font-extrabold text-[#FF7DA0] tracking-wider font-mono">
+                        {formatOtp(profile.otpCode)}
+                      </span>
+                      <p className="text-[9px] text-slate-400 font-semibold leading-normal">
+                        มีอายุ 5 นาที • บอกรหัสนี้กับร้านค้าเมื่อไม่มีกล้องสำหรับสแกน
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Announcement Board Card */}
+            {announcement && (
+              <div className="bg-[#FFFFFF] border border-pink-100/50 p-5 rounded-3xl shadow-sm text-left space-y-2 animate-fade-in relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FF7DA0]" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#FF7DA0] flex items-center gap-1.5">
+                  📢 ประกาศข่าวสารร้านค้า
+                </h3>
+                <p className="text-xs text-slate-650 leading-relaxed font-medium whitespace-pre-wrap pl-1">
+                  {announcement}
+                </p>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Generate Redemption Coupon Trigger Button with Pulse Animation */}
-        {!redeemQrUrl && currentPoints === 5 && (
-          <button
-            onClick={handleGenerateRedeemQR}
-            disabled={generatingRedeem}
-            className="w-full py-4 bg-[#FF7DA0] hover:bg-[#FF6B92] text-white rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 active:scale-[0.98] animate-bounce hover:animate-none scale-105 border-2 border-pink-200"
-          >
-            {generatingRedeem ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                <QrCode className="w-5 h-5 animate-pulse" />
-                กดสร้างคูปองแลกรางวัลที่นี่!
-              </>
-            )}
-          </button>
+            {/* 3. Dynamic Rewards List Card */}
+            <div className="bg-[#FFFFFF] border border-pink-100/50 p-5 rounded-3xl shadow-sm text-left space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-450 flex items-center gap-1.5">
+                <Gift className="w-4 h-4 text-[#FF7DA0]" />
+                รายการของรางวัลสำหรับแลกคะแนน
+              </h3>
+
+              {rewards.length > 0 ? (
+                <div className="space-y-3">
+                  {rewards.map((reward) => {
+                    const totalUserPoints = (profile?.currentPoints ?? 0) + (profile?.pendingPoints ?? 0);
+                    const canRedeem = totalUserPoints >= reward.points;
+
+                    return (
+                      <div 
+                        key={reward.id} 
+                        className="p-3 bg-[#FCF8F9] border border-pink-100/20 rounded-2xl flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <span className="font-bold text-slate-700">{reward.name}</span>
+                          <span className="block text-[10px] text-slate-500 font-semibold">
+                            ใช้ {reward.points} คะแนน
+                          </span>
+                        </div>
+
+                        <button
+                          disabled={!canRedeem || generatingRedeem}
+                          onClick={() => handleGenerateRedeemQR(reward)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            canRedeem
+                              ? "bg-[#FF7DA0] hover:bg-[#FF6B92] text-white shadow-sm hover:scale-[1.02]"
+                              : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50"
+                          }`}
+                        >
+                          {generatingRedeem && selectedReward?.id === reward.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <QrCode className="w-3.5 h-3.5" />
+                          )}
+                          กดแลกรางวัล
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center">
+                  <p className="text-xs text-slate-400 font-semibold">ยังไม่มีของรางวัลในระบบขณะนี้ 🐾</p>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* LINE Native QR Scan Button */}

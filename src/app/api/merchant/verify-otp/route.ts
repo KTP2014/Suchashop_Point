@@ -11,7 +11,9 @@ import { z } from "zod";
 const VerifyOtpSchema = z.object({
   otpCode: z.string().length(6, "รหัส OTP ต้องมี 6 หลัก").regex(/^[0-9]+$/, "รหัส OTP ต้องเป็นตัวเลขเท่านั้น"),
   actionType: z.enum(["EARN", "REDEEM"]),
-  points: z.number().min(1).max(5).optional(), // 1 to 5 points
+  points: z.number().int().min(1).optional(), // Can be points to earn or deduct
+  rewardId: z.string().optional(),
+  rewardName: z.string().optional(),
 }).strict();
 
 const pointsMutationService = new PointsMutationService();
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const { otpCode, actionType, points = 1 } = parsed.data;
+    const { otpCode, actionType, points, rewardId, rewardName } = parsed.data;
 
     // 1. TTL Cleanup: Delete expired OtpCodes globally to prevent bloat
     await prisma.otpCode.deleteMany({
@@ -75,35 +77,38 @@ export async function POST(request: Request) {
 
     // 5. Process Points Mutation based on Action Type
     if (actionType === "REDEEM") {
-      const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
-      if (customer.currentPoints !== maxPoints) {
-        throw new ValidationError(`ลูกค้าต้องมีแต้มสะสมครบ ${maxPoints} แต้มในการแลกรางวัล`);
+      const deductPoints = points ?? 5;
+      const totalPoints = customer.currentPoints + customer.pendingPoints;
+      if (totalPoints < deductPoints) {
+        throw new ValidationError(`ลูกค้ามีคะแนนสะสมไม่เพียงพอ (มี ${totalPoints} คะแนน ต้องการ ${deductPoints} คะแนน)`);
       }
 
       // Generate redemption coupon token on Redis and process it
-      const { token } = await tokenGenerationService.generateRedeemToken(customerId);
+      const { token } = await tokenGenerationService.generateRedeemToken(customerId, rewardId, deductPoints, rewardName);
       const result = await pointsMutationService.processScannedRedemption(operatorId, token);
       
-      logger.info("OTP_REDEMPTION_SUCCESS", { customerId, operatorId });
+      logger.info("OTP_REDEMPTION_SUCCESS", { customerId, operatorId, rewardName, deductPoints });
       return NextResponse.json({
         success: true,
         type: "REDEEM",
-        message: "แลกของรางวัลสำเร็จ!",
+        message: `แลกของรางวัล "${rewardName || 'ของรางวัล'}" สำเร็จ!`,
+        rewardName: rewardName || "ของรางวัล",
         balances: result.balances,
       });
 
     } else {
       // Action Type: EARN
+      const earnPoints = points ?? 1;
       // Generate earn token on Redis and process it
-      const { token } = await tokenGenerationService.generateEarnToken(operatorId, points);
+      const { token } = await tokenGenerationService.generateEarnToken(operatorId, earnPoints);
       const result = await pointsMutationService.processEarnToken(customerId, token);
 
-      logger.info("OTP_EARNING_SUCCESS", { customerId, operatorId, points });
+      logger.info("OTP_EARNING_SUCCESS", { customerId, operatorId, points: earnPoints });
       return NextResponse.json({
         success: true,
         type: "EARN",
-        addedPoints: points,
-        message: `สะสมแต้มสำเร็จ (+${points} แต้ม)!`,
+        addedPoints: earnPoints,
+        message: `สะสมแต้มสำเร็จ (+${earnPoints} แต้ม)!`,
         balances: result.balances,
       });
     }

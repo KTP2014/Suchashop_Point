@@ -88,14 +88,8 @@ export class PointsMutationService {
 
           const currentOld = customer.currentPoints;
           const pendingOld = customer.pendingPoints;
-          const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
           let currentNew = currentOld + pointsDelta;
           let pendingNew = pendingOld;
-
-          if (currentNew > maxPoints) {
-            pendingNew = pendingOld + (currentNew - maxPoints);
-            currentNew = maxPoints;
-          }
 
           const isUpdated = await this.userRepository.updateUserPointsWithLock(
             tx,
@@ -235,38 +229,50 @@ export class PointsMutationService {
             throw new ValidationError("User is not a valid customer.");
           }
 
-          const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
-          if (user.currentPoints !== maxPoints) {
-            throw new ConflictError(`Redemption requires exactly ${maxPoints} active points.`);
+          const rewardPoints = tokenData?.rewardPoints ?? 5;
+          const rewardName = tokenData?.rewardName ?? "ของรางวัล";
+
+          // 1. Consolidate pending points into current points inside transaction if needed
+          let currentPoints = user.currentPoints;
+          let pendingOld = user.pendingPoints;
+          if (pendingOld > 0) {
+            const consolidatedUser = await tx.user.update({
+              where: { id: customerId },
+              data: {
+                currentPoints: { increment: pendingOld },
+                pendingPoints: 0,
+                version: { increment: 1 },
+              },
+            });
+            currentPoints = consolidatedUser.currentPoints;
           }
 
-          // Deduct points and refill from pending
-          const pendingOld = user.pendingPoints;
-          const refillCount = Math.min(maxPoints, pendingOld);
-          const currentNew = refillCount;
-          const pendingNew = pendingOld - refillCount;
-
-          const isUpdated = await this.userRepository.updateUserPointsWithLock(
-            tx,
-            customerId,
-            currentNew,
-            pendingNew,
-            user.version
-          );
-
-          if (!isUpdated) {
-            throw new Error("CONCURRENCY_COLLISION");
+          // 2. Atomic Point Deduction check and update
+          let updatedUser;
+          try {
+            updatedUser = await tx.user.update({
+              where: {
+                id: customerId,
+                currentPoints: { gte: rewardPoints },
+              },
+              data: {
+                currentPoints: { decrement: rewardPoints },
+                version: { increment: 1 },
+              },
+            });
+          } catch (e: any) {
+            throw new ConflictError(`คะแนนสะสมหลักไม่เพียงพอสำหรับการแลกของรางวัล (ต้องการ ${rewardPoints} คะแนน)`);
           }
 
-          // Write redemption transaction ledger mapped to the scanning merchant!
+          // 3. Write redemption transaction ledger mapped to the scanning merchant!
           const transaction = await this.transactionRepository.createTransaction(tx, {
             customerId,
             customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
             type: TransactionType.REDEEM,
-            currentChange: -5,
-            pendingChange: pendingNew - pendingOld,
-            resultingCurrent: currentNew,
-            resultingPending: pendingNew,
+            currentChange: -rewardPoints,
+            pendingChange: -pendingOld,
+            resultingCurrent: updatedUser.currentPoints,
+            resultingPending: 0,
             tokenHash,
             operatorId: merchantId,
           });
@@ -283,16 +289,19 @@ export class PointsMutationService {
           logger.info("POINT_MUTATION_REDEEM_SUCCESS", {
             customerId,
             operatorId: merchantId,
-            currentNew,
-            pendingNew,
+            rewardName,
+            rewardPoints,
+            currentNew: updatedUser.currentPoints,
+            pendingNew: 0,
           });
 
           return {
             success: true,
-            message: "Reward claimed and points reset successfully",
+            message: `แลกรับของรางวัล "${rewardName}" สำเร็จ!`,
+            rewardName,
             balances: {
-              currentPoints: currentNew,
-              pendingPoints: pendingNew,
+              currentPoints: updatedUser.currentPoints,
+              pendingPoints: 0,
             },
           };
         });

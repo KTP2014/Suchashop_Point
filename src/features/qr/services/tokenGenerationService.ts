@@ -5,6 +5,9 @@ export interface QRTokenPayload {
   operatorId?: string; // Present on EARN tokens
   customerId?: string; // Present on REDEEM tokens
   points?: number;     // Present on EARN tokens
+  rewardId?: string;   // Added for v3.0 dynamic rewards
+  rewardPoints?: number; // Added for v3.0 dynamic rewards
+  rewardName?: string;   // Added for v3.0 dynamic rewards
   issuedAt: string;
   status: "PENDING" | "PROCESSING" | "USED";
   lockedUntil?: number;
@@ -36,12 +39,20 @@ export class TokenGenerationService {
   /**
    * Generate a secure dynamic redemption token for customer reward claiming.
    */
-  async generateRedeemToken(customerId: string): Promise<{ token: string; expiresAt: Date }> {
+  async generateRedeemToken(
+    customerId: string,
+    rewardId?: string,
+    rewardPoints?: number,
+    rewardName?: string
+  ): Promise<{ token: string; expiresAt: Date }> {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + this.TOKEN_TTL * 1000);
 
     const payload: QRTokenPayload = {
       customerId,
+      rewardId,
+      rewardPoints,
+      rewardName,
       issuedAt: new Date().toISOString(),
       status: "PENDING",
     };

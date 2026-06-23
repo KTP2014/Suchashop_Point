@@ -85,6 +85,7 @@ export default function MerchantDashboard() {
   const [otpCode, setOtpCode] = useState("");
   const [otpActionType, setOtpActionType] = useState<"EARN" | "REDEEM">("EARN");
   const [otpPoints, setOtpPoints] = useState<number>(1);
+  const [selectedOtpRewardId, setSelectedOtpRewardId] = useState<string>("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   // Admin Pending Staff State
@@ -98,6 +99,13 @@ export default function MerchantDashboard() {
   // Admin God Mode State
   const [godModePoints, setGodModePoints] = useState<number>(1);
   const [processingGodMode, setProcessingGodMode] = useState(false);
+
+  // v3.0 Dynamic Config States
+  const [rewards, setRewards] = useState<any[]>([]);
+  const [announcement, setAnnouncement] = useState<string>("");
+  const [newRewardName, setNewRewardName] = useState<string>("");
+  const [newRewardPoints, setNewRewardPoints] = useState<number>(10);
+  const [savingConfig, setSavingConfig] = useState<boolean>(false);
 
   // Custom Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
@@ -117,6 +125,70 @@ export default function MerchantDashboard() {
     });
   };
 
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch("/api/merchant/config");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setRewards(data.rewards || []);
+          setAnnouncement(data.announcement || "");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch shop configurations:", err);
+    }
+  };
+
+  const handleSaveConfig = async (updatedRewards = rewards, updatedAnnouncement = announcement) => {
+    setSavingConfig(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/merchant/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          announcement: updatedAnnouncement,
+          rewards: updatedRewards,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "บันทึกตั้งค่าระบบล้มเหลว");
+      }
+      setSuccess("บันทึกประกาศร้านค้าและรายการของรางวัลเรียบร้อยแล้ว!");
+      await fetchConfig();
+    } catch (err: any) {
+      setError(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleAddReward = () => {
+    if (!newRewardName.trim()) {
+      setError("กรุณากรอกชื่อของรางวัล");
+      return;
+    }
+    const newReward = {
+      id: `reward_${Date.now()}`,
+      name: newRewardName.trim(),
+      points: newRewardPoints,
+    };
+    const updatedRewards = [...rewards, newReward];
+    setRewards(updatedRewards);
+    setNewRewardName("");
+    setNewRewardPoints(10);
+    handleSaveConfig(updatedRewards, announcement);
+  };
+
+  const handleDeleteReward = (rewardId: string) => {
+    const updatedRewards = rewards.filter((r) => r.id !== rewardId);
+    setRewards(updatedRewards);
+    handleSaveConfig(updatedRewards, announcement);
+  };
+
   const checkUserAccess = async () => {
     try {
       const res = await fetch("/api/customer/profile");
@@ -130,6 +202,7 @@ export default function MerchantDashboard() {
           setUserRole(data.role);
           setUserName(data.displayName || "ผู้จัดการ");
           setLoadingUser(false);
+          await fetchConfig(); // Load rewards and announcement on mount
           if (data.role === "ADMIN") {
             fetchPendingStaff();
             fetchStaffList();
@@ -416,7 +489,7 @@ export default function MerchantDashboard() {
         throw new Error(data.message || "การแลกของรางวัลล้มเหลว");
       }
 
-      setSuccess("🎉 แลกรางวัลคูปองและหักแต้มเรียบร้อยแล้ว!");
+      setSuccess(`🎉 แลกของรางวัล "${data.rewardName || 'ของรางวัล'}" และหักแต้มสำเร็จ!`);
       await fetchHistory(page);
     } catch (err: any) {
       setError(err.message || "เกิดข้อผิดพลาดในการประมวลผลคูปองแลกรางวัล");
@@ -431,7 +504,27 @@ export default function MerchantDashboard() {
       return;
     }
 
-    const actionLabel = otpActionType === "EARN" ? `สะสมแต้มจำนวน +${otpPoints} แต้ม` : "แลกรับของรางวัลและล้างแต้ม";
+    let reqPoints: number | undefined = undefined;
+    let rewardId: string | undefined = undefined;
+    let rewardName: string | undefined = undefined;
+
+    if (otpActionType === "EARN") {
+      reqPoints = otpPoints;
+    } else {
+      const matchedReward = rewards.find(r => r.id === selectedOtpRewardId);
+      if (!matchedReward) {
+        setError("กรุณาเลือกของรางวัลที่ลูกค้าต้องการแลก");
+        return;
+      }
+      reqPoints = matchedReward.points;
+      rewardId = matchedReward.id;
+      rewardName = matchedReward.name;
+    }
+
+    const actionLabel = otpActionType === "EARN" 
+      ? `สะสมแต้มจำนวน +${otpPoints} แต้ม` 
+      : `แลกรับของรางวัล "${rewardName}" (ใช้ ${reqPoints} คะแนน)`;
+
     triggerConfirm(
       "ยืนยันการทำรายการผ่าน OTP",
       `คุณต้องการทำรายการ [${actionLabel}] สำหรับรหัส OTP: ${otpCode} ใช่หรือไม่?`,
@@ -447,7 +540,9 @@ export default function MerchantDashboard() {
             body: JSON.stringify({
               otpCode,
               actionType: otpActionType,
-              points: otpActionType === "EARN" ? otpPoints : undefined,
+              points: reqPoints,
+              rewardId,
+              rewardName,
             }),
           });
           const data = await res.json();
@@ -458,6 +553,7 @@ export default function MerchantDashboard() {
 
           setSuccess(`ทำรายการสำเร็จ: ${data.message}`);
           setOtpCode("");
+          setSelectedOtpRewardId("");
           await fetchHistory(page);
         } catch (err: any) {
           setError(err.message || "เกิดข้อผิดพลาดในการตรวจสอบรหัส OTP");
@@ -793,6 +889,26 @@ export default function MerchantDashboard() {
                   </div>
                 )}
 
+                {otpActionType === "REDEEM" && (
+                  <div className="space-y-2 animate-fade-in text-left">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                      เลือกของรางวัลที่ต้องการแลก
+                    </label>
+                    <select
+                      value={selectedOtpRewardId}
+                      onChange={(e) => setSelectedOtpRewardId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-2xl focus:outline-none focus:border-emerald-500 text-slate-200 text-xs cursor-pointer font-semibold"
+                    >
+                      <option value="">-- เลือกของรางวัล --</option>
+                      {rewards.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} (ใช้ {r.points} คะแนน)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={verifyingOtp || otpCode.length !== 6}
@@ -1019,6 +1135,111 @@ export default function MerchantDashboard() {
                         ล้างแต้มลูกค้าทุกคน
                       </button>
                     </div>
+                  </div>
+                </div>
+
+                {/* D. Shop Announcement Editor */}
+                <div className="pt-5 border-t border-slate-850 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-350 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                    จัดการประกาศร้านค้า (Shop Announcement Editor)
+                  </h4>
+                  <div className="space-y-3">
+                    <textarea
+                      value={announcement}
+                      onChange={(e) => setAnnouncement(e.target.value)}
+                      placeholder="พิมพ์ประกาศสำหรับแสดงบนหน้าลูกค้า..."
+                      className="w-full h-20 px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-2xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs transition-all font-semibold resize-none"
+                    />
+                    <button
+                      onClick={() => handleSaveConfig(rewards, announcement)}
+                      disabled={savingConfig}
+                      className="w-full sm:w-auto px-4 py-2 bg-indigo-650 hover:bg-indigo-550 text-white rounded-xl text-xs font-bold transition-all active:scale-[0.96] flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/10 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingConfig ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      บันทึกประกาศ
+                    </button>
+                  </div>
+                </div>
+
+                {/* E. Reward Config Panel */}
+                <div className="pt-5 border-t border-slate-850 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-350 flex items-center gap-1.5">
+                    <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                    จัดการรายการของรางวัล (Reward Config Panel)
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                          ชื่อของรางวัล
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="เช่น พวงกุญแจ, เครื่องดื่มฟรี"
+                          value={newRewardName}
+                          onChange={(e) => setNewRewardName(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs transition-all font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                          คะแนนที่ต้องใช้แลก (แต้มปกติ)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={newRewardPoints}
+                          onChange={(e) => setNewRewardPoints(Math.max(1, parseInt(e.target.value) || 0))}
+                          className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs transition-all font-semibold font-mono"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAddReward}
+                      disabled={savingConfig}
+                      className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.96] flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10"
+                    >
+                      <Gift className="w-3.5 h-3.5" />
+                      เพิ่มของรางวัลใหม่
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 mt-4">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                      รายการของรางวัลปัจจุบัน ({rewards.length})
+                    </label>
+                    {rewards.length > 0 ? (
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        {rewards.map((r) => (
+                          <div 
+                            key={r.id} 
+                            className="p-3 bg-slate-950/40 border border-slate-850 rounded-xl flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="space-y-0.5">
+                              <span className="font-bold text-slate-200">{r.name}</span>
+                              <span className="block text-[10px] text-indigo-400 font-bold font-mono">
+                                ใช้ {r.points} คะแนน
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteReward(r.id)}
+                              disabled={savingConfig}
+                              className="p-1.5 text-rose-450 hover:text-rose-350 hover:bg-rose-950/30 border border-slate-850 rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                              title="ลบของรางวัลนี้"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic text-center py-2">ไม่มีของรางวัลในระบบ</p>
+                    )}
                   </div>
                 </div>
               </div>

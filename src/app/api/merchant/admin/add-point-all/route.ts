@@ -54,20 +54,15 @@ export async function POST(request: Request) {
       const currentOld = c.currentPoints;
       const pendingOld = c.pendingPoints;
 
-      let currentNew = currentOld + points;
-      let pendingNew = pendingOld;
-
-      if (currentNew > maxPoints) {
-        pendingNew = pendingOld + (currentNew - maxPoints);
-        currentNew = maxPoints;
-      }
+      const currentNew = currentOld + points;
+      const pendingNew = pendingOld;
 
       transactionsData.push({
         customerId: c.id,
         customerPhoneNumber: c.phoneNumber ?? (c.lineUserId ? `LINE:${c.lineUserId}` : "LINE_USER"),
         type: TransactionType.EARN,
-        currentChange: currentNew - currentOld,
-        pendingChange: pendingNew - pendingOld,
+        currentChange: points,
+        pendingChange: 0,
         resultingCurrent: currentNew,
         resultingPending: pendingNew,
         operatorId: adminId,
@@ -75,60 +70,17 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. Prepare grouped updateMany promises for database efficiency
-    const updatePromises = [];
-
-    // Handle any users who might exceed maxPoints due to changes in config
-    updatePromises.push(
+    // 3. Execute updateMany and ledger creation in a single transaction
+    await prisma.$transaction([
       prisma.user.updateMany({
-        where: { role: { in: targetRoles }, currentPoints: { gt: maxPoints } },
+        where: { role: { in: targetRoles } },
         data: {
-          pendingPoints: { increment: points },
+          currentPoints: { increment: points },
           version: { increment: 1 },
         },
-      })
-    );
-
-    for (let x = maxPoints; x >= 0; x--) {
-      const currentOld = x;
-      let currentNew = currentOld + points;
-      let overflow = 0;
-      if (currentNew > maxPoints) {
-        overflow = currentNew - maxPoints;
-        currentNew = maxPoints;
-      }
-
-      if (overflow > 0) {
-        updatePromises.push(
-          prisma.user.updateMany({
-            where: { role: { in: targetRoles }, currentPoints: currentOld },
-            data: {
-              currentPoints: currentNew,
-              pendingPoints: { increment: overflow },
-              version: { increment: 1 },
-            },
-          })
-        );
-      } else {
-        updatePromises.push(
-          prisma.user.updateMany({
-            where: { role: { in: targetRoles }, currentPoints: currentOld },
-            data: {
-              currentPoints: currentNew,
-              version: { increment: 1 },
-            },
-          })
-        );
-      }
-    }
-
-    // 4. Execute all updates and ledger creation in a single transaction
-    if (updatePromises.length > 0) {
-      await prisma.$transaction([
-        ...updatePromises,
-        prisma.transaction.createMany({ data: transactionsData }) as any,
-      ]);
-    }
+      }),
+      prisma.transaction.createMany({ data: transactionsData }) as any,
+    ]);
 
     logger.info("ADMIN_ADD_POINTS_ALL_SUCCESS", { adminId, addedPoints: points, count: customers.length });
 

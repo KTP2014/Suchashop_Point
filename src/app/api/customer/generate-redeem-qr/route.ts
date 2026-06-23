@@ -4,6 +4,13 @@ import { UserRepository } from "../../../../features/auth/repository/userReposit
 import { checkRateLimit } from "../../../../lib/rateLimit";
 import { AppError, ConflictError } from "../../../../lib/errors";
 import { logger } from "../../../../lib/logger";
+import { z } from "zod";
+
+const GenerateRedeemSchema = z.object({
+  rewardId: z.string(),
+  rewardPoints: z.number().int().min(1),
+  rewardName: z.string().min(1),
+}).strict();
 
 const tokenGenerationService = new TokenGenerationService();
 const userRepository = new UserRepository();
@@ -19,6 +26,19 @@ export async function POST(request: Request) {
         message: "Customer authentication is missing.",
       }, { status: 401 });
     }
+
+    const body = await request.json();
+    const parsed = GenerateRedeemSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({
+        success: false,
+        code: "BAD_REQUEST_VALIDATION",
+        message: "ข้อมูลไม่ถูกต้อง",
+        errors: parsed.error.issues,
+      }, { status: 400 });
+    }
+
+    const { rewardId, rewardPoints, rewardName } = parsed.data;
 
     // Enforce rate limit: 10 requests / minute per Customer Account
     await checkRateLimit(customerId, {
@@ -37,13 +57,14 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
-    if (customer.currentPoints !== 5) {
-      throw new ConflictError("Redemption requires exactly 5 active points.");
+    const totalPoints = customer.currentPoints + customer.pendingPoints;
+    if (totalPoints < rewardPoints) {
+      throw new ConflictError(`คะแนนสะสมไม่เพียงพอ (มี ${totalPoints} คะแนน ต้องการ ${rewardPoints} คะแนน)`);
     }
 
-    const result = await tokenGenerationService.generateRedeemToken(customerId);
+    const result = await tokenGenerationService.generateRedeemToken(customerId, rewardId, rewardPoints, rewardName);
 
-    logger.info("CUSTOMER_GENERATE_REDEEM_QR_SUCCESS", { customerId });
+    logger.info("CUSTOMER_GENERATE_REDEEM_QR_SUCCESS", { customerId, rewardId, rewardPoints });
 
     return NextResponse.json({
       success: true,

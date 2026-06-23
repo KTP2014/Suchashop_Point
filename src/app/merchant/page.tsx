@@ -21,6 +21,9 @@ interface TransactionItem {
   resultingCurrent: number;
   resultingPending: number;
   createdAt: string;
+  customer?: {
+    displayName: string | null;
+  };
 }
 
 interface PendingStaffItem {
@@ -1075,7 +1078,9 @@ export default function MerchantDashboard() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-200">{tx.customerPhoneNumber}</span>
+                          <span className="font-bold text-slate-200">
+                            {tx.customer?.displayName || tx.customerPhoneNumber}
+                          </span>
                           <span
                             className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
                               tx.type === "EARN"
@@ -1116,7 +1121,7 @@ export default function MerchantDashboard() {
 
                         {tx.type !== "RESET" && (
                           <button
-                            onClick={() => handleResetSingleCustomer(tx.customerId, tx.customerPhoneNumber)}
+                            onClick={() => handleResetSingleCustomer(tx.customerId, tx.customer?.displayName || tx.customerPhoneNumber)}
                             className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-950/30 border border-slate-800 rounded-xl transition-all cursor-pointer"
                             title="รีเซ็ตแต้มลูกค้ารายนี้"
                           >

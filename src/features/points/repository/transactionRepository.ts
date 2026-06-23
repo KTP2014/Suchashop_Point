@@ -75,6 +75,13 @@ export class TransactionRepository {
         },
         skip,
         take: limit,
+        include: {
+          customer: {
+            select: {
+              displayName: true,
+            },
+          },
+        },
       }),
       prisma.transaction.count({ where }),
     ]);

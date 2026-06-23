@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     });
 
     // 3. Prepare bulk transaction entries
+    const nowTimestamp = Date.now();
     const transactionsData = customers.map((c) => ({
       customerId: c.id,
       customerPhoneNumber: c.phoneNumber ?? (c.lineUserId ? `LINE:${c.lineUserId}` : "LINE_USER"),
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       resultingCurrent: 0,
       resultingPending: 0,
       operatorId: adminId,
+      tokenHash: `reset-${c.id}-${nowTimestamp}`, // Add unique key to prevent Prisma unique constraint violation
     }));
 
     // 4. Batch insert all audit transaction entries (using createMany)

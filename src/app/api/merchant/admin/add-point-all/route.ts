@@ -47,6 +47,7 @@ export async function POST(request: Request) {
     }
 
     const transactionsData = [];
+    const nowTimestamp = Date.now();
 
     // 2. Calculate transaction records for the audit ledger
     for (const c of customers) {
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
         resultingCurrent: currentNew,
         resultingPending: pendingNew,
         operatorId: adminId,
+        tokenHash: `earn-all-${c.id}-${nowTimestamp}`, // Add unique key to prevent Prisma unique constraint violation
       });
     }
 

@@ -561,26 +561,6 @@ export default function CustomerDashboard() {
                 </span>
               </div>
 
-              {/* Points Details Breakdown */}
-              {/* <div className="w-full grid grid-cols-2 gap-4 pt-4 border-t border-pink-100/20">
-                <div className="flex flex-col items-center border-r border-pink-100/20">
-                  <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
-                    คะแนนสะสมหลัก
-                  </span>
-                  <span className="text-sm font-bold text-slate-700 mt-0.5">
-                    {profile?.currentPoints ?? 0} คะแนน
-                  </span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
-                    คะแนนสะสมคิว
-                  </span>
-                  <span className="text-sm font-bold text-slate-700 mt-0.5">
-                    {profile?.pendingPoints ?? 0} คะแนน
-                  </span>
-                </div>
-              </div>*/}
-
               {/* OTP Code Display Container */}
               {profile?.otpCode && (
                 <div className="w-full mt-4 flex flex-col items-center justify-center">

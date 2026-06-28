@@ -62,6 +62,22 @@ export async function POST(request: Request) {
       throw new ConflictError(`คะแนนสะสมไม่เพียงพอ (มี ${totalPoints} คะแนน ต้องการ ${rewardPoints} คะแนน)`);
     }
 
+    // Deduplication check: check if the customer has already redeemed this rewardId
+    const { prisma } = await import("../../../../lib/prisma");
+    const alreadyRedeemed = await prisma.transaction.findFirst({
+      where: {
+        customerId,
+        type: "REDEEM",
+        tokenHash: {
+          startsWith: `redeem:${rewardId}:`,
+        },
+      },
+    });
+
+    if (alreadyRedeemed) {
+      throw new ConflictError("คุณเคยใช้สิทธิ์แลกของรางวัลชิ้นนี้ไปแล้ว");
+    }
+
     const result = await tokenGenerationService.generateRedeemToken(customerId, rewardId, rewardPoints, rewardName);
 
     logger.info("CUSTOMER_GENERATE_REDEEM_QR_SUCCESS", { customerId, rewardId, rewardPoints });

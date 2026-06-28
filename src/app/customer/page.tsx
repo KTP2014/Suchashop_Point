@@ -15,6 +15,7 @@ interface ProfileData {
   totalPoints: number;
   role: string;
   otpCode: string;
+  redeemedRewardIds?: string[];
 }
 
 const CatPaw = ({ active, className = "" }: { active: boolean; className?: string }) => (
@@ -146,6 +147,7 @@ export default function CustomerDashboard() {
           totalPoints: data.totalPoints,
           role: data.role,
           otpCode: data.otpCode,
+          redeemedRewardIds: data.redeemedRewardIds || [],
         });
       }
     } catch (err: any) {
@@ -545,7 +547,7 @@ export default function CustomerDashboard() {
               </div>
    
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-450 mb-1 self-start">
-                ยอดคะแนนสะสมทั้งหมดของคุณ
+                คะแนนสะสมทั้งหมดของคุณ (Lifetime Points)
               </h2>
 
               <div className="w-full flex flex-col items-center justify-center py-5 bg-gradient-to-tr from-[#FFF5F6] to-[#FFF0F2] border border-pink-100/30 rounded-2xl shadow-inner mb-4">
@@ -636,6 +638,21 @@ export default function CustomerDashboard() {
                   {rewards.map((reward) => {
                     const totalUserPoints = (profile?.currentPoints ?? 0) + (profile?.pendingPoints ?? 0);
                     const canRedeem = totalUserPoints >= reward.points;
+                    const hasAlreadyRedeemed = profile?.redeemedRewardIds?.includes(reward.id) ?? false;
+
+                    let buttonText = "กดรับรางวัล";
+                    let buttonClass = "bg-emerald-500 hover:bg-[#10b981]/90 text-white shadow-sm hover:scale-[1.02]";
+                    let isButtonDisabled = !canRedeem || generatingRedeem;
+
+                    if (hasAlreadyRedeemed) {
+                      buttonText = "แลกรับของรางวัลนี้แล้ว";
+                      buttonClass = "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50";
+                      isButtonDisabled = true;
+                    } else if (!canRedeem) {
+                      buttonText = "คะแนนสะสมไม่พอ";
+                      buttonClass = "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50";
+                      isButtonDisabled = true;
+                    }
 
                     return (
                       <div 
@@ -650,20 +667,16 @@ export default function CustomerDashboard() {
                         </div>
 
                         <button
-                          disabled={!canRedeem || generatingRedeem}
+                          disabled={isButtonDisabled}
                           onClick={() => handleGenerateRedeemQR(reward)}
-                          className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                            canRedeem
-                              ? "bg-[#FF7DA0] hover:bg-[#FF6B92] text-white shadow-sm hover:scale-[1.02]"
-                              : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50"
-                          }`}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${buttonClass}`}
                         >
                           {generatingRedeem && selectedReward?.id === reward.id ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
                             <QrCode className="w-3.5 h-3.5" />
                           )}
-                          กดแลกรางวัล
+                          {buttonText}
                         </button>
                       </div>
                     );

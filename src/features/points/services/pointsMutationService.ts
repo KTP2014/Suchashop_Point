@@ -231,6 +231,7 @@ export class PointsMutationService {
 
           const rewardPoints = tokenData?.rewardPoints ?? 5;
           const rewardName = tokenData?.rewardName ?? "ของรางวัล";
+          const rewardId = tokenData?.rewardId ?? "unknown";
 
           // 1. Consolidate pending points into current points inside transaction if needed
           let currentPoints = user.currentPoints;
@@ -247,7 +248,21 @@ export class PointsMutationService {
             currentPoints = consolidatedUser.currentPoints;
           }
 
-          // 2. Atomic Point Deduction check and update
+          // Double check deduplication inside the transaction (prevent race conditions)
+          const alreadyRedeemed = await tx.transaction.findFirst({
+            where: {
+              customerId,
+              type: TransactionType.REDEEM,
+              tokenHash: {
+                startsWith: `redeem:${rewardId}:`,
+              },
+            },
+          });
+          if (alreadyRedeemed) {
+            throw new ConflictError("คุณเคยใช้สิทธิ์แลกของรางวัลชิ้นนี้ไปแล้ว");
+          }
+
+          // 2. Check points sufficiency and increment version (do NOT decrement points for lifetime tier)
           let updatedUser;
           try {
             updatedUser = await tx.user.update({
@@ -256,7 +271,6 @@ export class PointsMutationService {
                 currentPoints: { gte: rewardPoints },
               },
               data: {
-                currentPoints: { decrement: rewardPoints },
                 version: { increment: 1 },
               },
             });
@@ -269,11 +283,11 @@ export class PointsMutationService {
             customerId,
             customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
             type: TransactionType.REDEEM,
-            currentChange: -rewardPoints,
+            currentChange: 0, // No points deducted in lifetime points system
             pendingChange: -pendingOld,
             resultingCurrent: updatedUser.currentPoints,
             resultingPending: 0,
-            tokenHash,
+            tokenHash: `redeem:${rewardId}:${tokenHash}`,
             operatorId: merchantId,
           });
 

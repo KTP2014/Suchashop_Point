@@ -83,6 +83,23 @@ export async function POST(request: Request) {
         throw new ValidationError(`ลูกค้ามีคะแนนสะสมไม่เพียงพอ (มี ${totalPoints} คะแนน ต้องการ ${deductPoints} คะแนน)`);
       }
 
+      // Deduplication check: check if the customer has already redeemed this rewardId
+      if (rewardId) {
+        const alreadyRedeemed = await prisma.transaction.findFirst({
+          where: {
+            customerId,
+            type: "REDEEM",
+            tokenHash: {
+              startsWith: `redeem:${rewardId}:`,
+            },
+          },
+        });
+
+        if (alreadyRedeemed) {
+          throw new ConflictError("คุณเคยใช้สิทธิ์แลกของรางวัลชิ้นนี้ไปแล้ว");
+        }
+      }
+
       // Generate redemption coupon token on Redis and process it
       const { token } = await tokenGenerationService.generateRedeemToken(customerId, rewardId, deductPoints, rewardName);
       const result = await pointsMutationService.processScannedRedemption(operatorId, token);

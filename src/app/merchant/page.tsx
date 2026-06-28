@@ -171,10 +171,12 @@ export default function MerchantDashboard() {
       setError("กรุณากรอกชื่อของรางวัล");
       return;
     }
+    const uniqueId = `reward_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     const newReward = {
-      id: `reward_${Date.now()}`,
+      id: uniqueId,
       name: newRewardName.trim(),
       points: newRewardPoints,
+      isActive: true,
     };
     const updatedRewards = [...rewards, newReward];
     setRewards(updatedRewards);
@@ -184,7 +186,12 @@ export default function MerchantDashboard() {
   };
 
   const handleDeleteReward = (rewardId: string) => {
-    const updatedRewards = rewards.filter((r) => r.id !== rewardId);
+    const updatedRewards = rewards.map((r) => {
+      if (r.id === rewardId) {
+        return { ...r, isActive: false };
+      }
+      return r;
+    });
     setRewards(updatedRewards);
     handleSaveConfig(updatedRewards, announcement);
   };
@@ -900,7 +907,7 @@ export default function MerchantDashboard() {
                       className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-2xl focus:outline-none focus:border-emerald-500 text-slate-200 text-xs cursor-pointer font-semibold"
                     >
                       <option value="">-- เลือกของรางวัล --</option>
-                      {rewards.map((r) => (
+                      {rewards.filter(r => r.isActive !== false).map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.name} (ใช้ {r.points} คะแนน)
                         </option>
@@ -1209,13 +1216,13 @@ export default function MerchantDashboard() {
                     </button>
                   </div>
 
-                  <div className="space-y-2 mt-4">
+                   <div className="space-y-2 mt-4">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                      รายการของรางวัลปัจจุบัน ({rewards.length})
+                      รายการของรางวัลปัจจุบัน ({rewards.filter(r => r.isActive !== false).length})
                     </label>
-                    {rewards.length > 0 ? (
+                    {rewards.filter(r => r.isActive !== false).length > 0 ? (
                       <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {rewards.map((r) => (
+                        {rewards.filter(r => r.isActive !== false).map((r) => (
                           <div 
                             key={r.id} 
                             className="p-3 bg-slate-950/40 border border-slate-850 rounded-xl flex items-center justify-between gap-3 text-xs"

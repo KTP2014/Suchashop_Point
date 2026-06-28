@@ -10,6 +10,7 @@ const RewardSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "ชื่อรางวัลห้ามว่าง"),
   points: z.number().int().min(1, "แต้มที่ใช้แลกต้องมีอย่างน้อย 1 คะแนน"),
+  isActive: z.boolean().optional(),
 });
 
 const ConfigPostSchema = z.object({

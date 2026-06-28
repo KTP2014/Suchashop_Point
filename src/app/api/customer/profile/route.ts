@@ -71,6 +71,27 @@ export async function GET(request: Request) {
     const currentPoints = user.currentPoints;
     const pendingPoints = user.pendingPoints;
 
+    // Fetch redeemed reward IDs from transaction history
+    const redeems = await prisma.transaction.findMany({
+      where: {
+        customerId,
+        type: "REDEEM",
+        tokenHash: {
+          startsWith: "redeem:",
+        },
+      },
+      select: {
+        tokenHash: true,
+      },
+    });
+
+    const redeemedRewardIds = redeems
+      .map((tx) => {
+        const parts = tx.tokenHash?.split(":") || [];
+        return parts[1]; // rewardId is at index 1
+      })
+      .filter(Boolean);
+
     return NextResponse.json({
       success: true,
       currentPoints,
@@ -78,6 +99,7 @@ export async function GET(request: Request) {
       totalPoints: currentPoints + pendingPoints,
       role: user.role,
       otpCode,
+      redeemedRewardIds,
     });
 
   } catch (error: any) {

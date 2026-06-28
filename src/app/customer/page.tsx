@@ -64,6 +64,7 @@ export default function CustomerDashboard() {
     id: string;
     name: string;
     points: number;
+    isActive?: boolean;
   }
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [announcement, setAnnouncement] = useState<string>("");
@@ -633,9 +634,11 @@ export default function CustomerDashboard() {
                 รายการของรางวัลสำหรับแลกคะแนน
               </h3>
 
-              {rewards.length > 0 ? (
+              {rewards.filter((r) => r.isActive !== false).length > 0 ? (
                 <div className="space-y-3">
-                  {rewards.map((reward) => {
+                  {rewards
+                    .filter((r) => r.isActive !== false)
+                    .map((reward) => {
                     const totalUserPoints = (profile?.currentPoints ?? 0) + (profile?.pendingPoints ?? 0);
                     const canRedeem = totalUserPoints >= reward.points;
                     const hasAlreadyRedeemed = profile?.redeemedRewardIds?.includes(reward.id) ?? false;

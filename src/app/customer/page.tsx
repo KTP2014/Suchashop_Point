@@ -562,7 +562,7 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Points Details Breakdown */}
-              <div className="w-full grid grid-cols-2 gap-4 pt-4 border-t border-pink-100/20">
+              {/* <div className="w-full grid grid-cols-2 gap-4 pt-4 border-t border-pink-100/20">
                 <div className="flex flex-col items-center border-r border-pink-100/20">
                   <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
                     คะแนนสะสมหลัก
@@ -579,7 +579,7 @@ export default function CustomerDashboard() {
                     {profile?.pendingPoints ?? 0} คะแนน
                   </span>
                 </div>
-              </div>
+              </div>*/}
 
               {/* OTP Code Display Container */}
               {profile?.otpCode && (

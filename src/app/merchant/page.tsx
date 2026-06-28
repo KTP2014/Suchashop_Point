@@ -97,14 +97,14 @@ export default function MerchantDashboard() {
   const [loadingStaffMembers, setLoadingStaffMembers] = useState(false);
 
   // Admin God Mode State
-  const [godModePoints, setGodModePoints] = useState<number>(1);
+  const [godModePoints, setGodModePoints] = useState<string>("1");
   const [processingGodMode, setProcessingGodMode] = useState(false);
 
   // v3.0 Dynamic Config States
   const [rewards, setRewards] = useState<any[]>([]);
   const [announcement, setAnnouncement] = useState<string>("");
   const [newRewardName, setNewRewardName] = useState<string>("");
-  const [newRewardPoints, setNewRewardPoints] = useState<number>(10);
+  const [newRewardPoints, setNewRewardPoints] = useState<string>("10");
   const [savingConfig, setSavingConfig] = useState<boolean>(false);
 
   // Custom Confirmation Modal State
@@ -172,16 +172,18 @@ export default function MerchantDashboard() {
       return;
     }
     const uniqueId = `reward_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const parsedPoints = parseInt(newRewardPoints, 10);
+    const finalPoints = isNaN(parsedPoints) || parsedPoints < 1 ? 1 : parsedPoints;
     const newReward = {
       id: uniqueId,
       name: newRewardName.trim(),
-      points: newRewardPoints,
+      points: finalPoints,
       isActive: true,
     };
     const updatedRewards = [...rewards, newReward];
     setRewards(updatedRewards);
     setNewRewardName("");
-    setNewRewardPoints(10);
+    setNewRewardPoints("10");
     handleSaveConfig(updatedRewards, announcement);
   };
 
@@ -602,9 +604,12 @@ export default function MerchantDashboard() {
 
   // Admin God Mode: Grant points to everyone
   const handleAdminAddPointsAll = () => {
+    const parsedPoints = parseInt(godModePoints, 10);
+    const finalPoints = isNaN(parsedPoints) || parsedPoints < 1 ? 1 : parsedPoints;
+
     triggerConfirm(
       "ยืนยันการเพิ่มแต้มแจกทุกคน",
-      `คุณต้องการเพิ่มแต้มสะสม (+${godModePoints} แต้ม) ให้กับลูกค้าทุกคนในระบบใช่หรือไม่? สำหรับคนที่มีแต้มเกินจะถูกเก็บไว้ที่แต้มรอคิว (Overflow)`,
+      `คุณต้องการเพิ่มแต้มสะสม (+${finalPoints} แต้ม) ให้กับลูกค้าทุกคนในระบบใช่หรือไม่? สำหรับคนที่มีแต้มเกินจะถูกเก็บไว้ที่แต้มรอคิว (Overflow)`,
       async () => {
         setProcessingGodMode(true);
         setError(null);
@@ -613,13 +618,13 @@ export default function MerchantDashboard() {
           const res = await fetch("/api/merchant/admin/add-point-all", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ points: godModePoints }),
+            body: JSON.stringify({ points: finalPoints }),
           });
           const data = await res.json();
           if (!res.ok || !data.success) {
             throw new Error(data.message || "การเพิ่มแต้มแจกลูกค้าทุกคนล้มเหลว");
           }
-          setSuccess(`แจกแต้มให้ลูกค้าทุกคนสำเร็จ (+${godModePoints} แต้ม, ${data.count} บัญชี)`);
+          setSuccess(`แจกแต้มให้ลูกค้าทุกคนสำเร็จ (+${finalPoints} แต้ม, ${data.count} บัญชี)`);
           await fetchHistory(page);
         } catch (err: any) {
           setError(err.message || "เกิดข้อผิดพลาดในการแจกแต้ม");
@@ -1093,15 +1098,14 @@ export default function MerchantDashboard() {
 
                       <div className="flex gap-2 pt-1">
                         <div className="relative flex-shrink-0">
-                          <select
+                          <input
+                            type="number"
+                            min={1}
+                            max={5}
                             value={godModePoints}
-                            onChange={(e) => setGodModePoints(Number(e.target.value))}
-                            className="h-10 px-3 bg-slate-900 border border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs cursor-pointer appearance-none text-center font-bold font-mono min-w-[70px]"
-                          >
-                            {[1, 2, 3, 4, 5].map((v) => (
-                              <option key={v} value={v}>+{v}</option>
-                            ))}
-                          </select>
+                            onChange={(e) => setGodModePoints(e.target.value)}
+                            className="h-10 w-16 px-3 bg-slate-900 border border-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs text-center font-bold font-mono"
+                          />
                         </div>
                         <button
                           onClick={handleAdminAddPointsAll}
@@ -1201,7 +1205,7 @@ export default function MerchantDashboard() {
                           type="number"
                           min={1}
                           value={newRewardPoints}
-                          onChange={(e) => setNewRewardPoints(Math.max(1, parseInt(e.target.value) || 0))}
+                          onChange={(e) => setNewRewardPoints(e.target.value)}
                           className="w-full px-3 py-2 bg-slate-950/60 border border-slate-850 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-200 text-xs transition-all font-semibold font-mono"
                         />
                       </div>

@@ -41,9 +41,12 @@ export async function middleware(request: NextRequest) {
         return handleUnauthorized(request, "Access restricted to Customers.");
       }
 
-      // 🟢 2. แก้ไขฝั่งเส้นทางร้านค้า: เปิดประตูเมืองให้ระดับ ADMIN และ STAFF ผ่านเข้าไปได้ด้วย!
+      // 🟢 2. แก้ไขฝั่งเส้นทางร้านค้า: เปิดประตูเมืองให้ระดับ ADMIN และ STAFF ผ่านเข้าไปได้ด้วย! (และยอมให้ผู้ใช้ทุกคนเข้าถึงข้อมูลผ่าน GET /api/merchant/config)
       if (isMerchantRoute && role !== "MERCHANT" && role !== "STAFF" && role !== "ADMIN") {
-        return handleUnauthorized(request, "Access restricted to Merchants.");
+        const isPublicConfigGet = pathname === "/api/merchant/config" && request.method === "GET";
+        if (!isPublicConfigGet) {
+          return handleUnauthorized(request, "Access restricted to Merchants.");
+        }
       }
 
       // Append decoded userId and role to request headers for downstream endpoint retrievals

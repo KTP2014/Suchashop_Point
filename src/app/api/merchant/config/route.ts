@@ -26,8 +26,8 @@ const DEFAULT_REWARDS = [
 
 export async function GET(request: Request) {
   try {
-    // Authenticate: any valid role (CUSTOMER, STAFF, ADMIN) can read configuration
-    await secureRoute([Role.CUSTOMER, Role.STAFF, Role.ADMIN, Role.MERCHANT]);
+    // Authenticate: any valid role can read configuration
+    await secureRoute([Role.CUSTOMER, Role.STAFF, Role.ADMIN, Role.MERCHANT, Role.PENDING_APPROVAL]);
 
     const announcement = (await redis.get<string>("config:announcement")) || "ยินดีต้อนรับสู่ Sucha Shop! สะสมแต้มและแลกของรางวัลสุดพิเศษได้เลย 🐾";
     const rewardsData = await redis.get<any[]>("config:rewards");

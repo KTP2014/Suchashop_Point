@@ -586,7 +586,7 @@ export default function CustomerDashboard() {
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[#FF7DA0] flex items-center gap-1.5">
                   📢 ประกาศข่าวสารร้านค้า
                 </h3>
-                <p className="text-xs text-slate-650 leading-relaxed font-medium whitespace-pre-wrap pl-1">
+                <p className="text-base text-slate-655 leading-relaxed font-semibold whitespace-pre-wrap pl-1">
                   {announcement}
                 </p>
               </div>
@@ -625,11 +625,11 @@ export default function CustomerDashboard() {
                     return (
                       <div 
                         key={reward.id} 
-                        className="p-3 bg-[#FCF8F9] border border-pink-100/20 rounded-2xl flex items-center justify-between gap-3 text-xs"
+                        className="p-4 bg-[#FCF8F9] border border-pink-100/20 rounded-2xl flex items-center justify-between gap-3 text-xs"
                       >
                         <div className="space-y-1">
-                          <span className="font-bold text-slate-700">{reward.name}</span>
-                          <span className="block text-[10px] text-slate-500 font-semibold">
+                          <span className="text-lg font-bold text-slate-800 block leading-tight">{reward.name}</span>
+                          <span className="block text-sm text-[#FF7DA0] font-bold">
                             ใช้ {reward.points} คะแนน
                           </span>
                         </div>
@@ -637,7 +637,7 @@ export default function CustomerDashboard() {
                         <button
                           disabled={isButtonDisabled}
                           onClick={() => handleGenerateRedeemQR(reward)}
-                          className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${buttonClass}`}
+                          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${buttonClass}`}
                         >
                           {generatingRedeem && selectedReward?.id === reward.id ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />

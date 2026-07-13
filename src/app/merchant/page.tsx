@@ -880,7 +880,7 @@ export default function MerchantDashboard() {
 
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                  <label className="text-base font-semibold text-slate-700 block mb-1">
                     รหัส OTP 6 หลักของลูกค้า
                   </label>
                   <input
@@ -921,7 +921,7 @@ export default function MerchantDashboard() {
 
                 {otpActionType === "EARN" && (
                   <div className="space-y-2 animate-fade-in text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    <label className="text-base font-semibold text-slate-700 block mb-1">
                       จำนวนแต้มที่สะสมผ่าน OTP (+{otpPoints} แต้ม)
                     </label>
                     <div className="grid grid-cols-5 gap-1.5">
@@ -945,7 +945,7 @@ export default function MerchantDashboard() {
 
                 {otpActionType === "REDEEM" && (
                   <div className="space-y-2 animate-fade-in text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    <label className="text-base font-semibold text-slate-700 block mb-1">
                       เลือกของรางวัลที่ต้องการแลก
                     </label>
                     <select
@@ -1228,7 +1228,7 @@ export default function MerchantDashboard() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                        <label className="text-base font-semibold text-slate-700 block mb-1">
                           ชื่อของรางวัล
                         </label>
                         <input
@@ -1240,7 +1240,7 @@ export default function MerchantDashboard() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                        <label className="text-base font-semibold text-slate-700 block mb-1">
                           คะแนนที่ต้องใช้แลก (แต้มปกติ)
                         </label>
                         <input
@@ -1263,7 +1263,7 @@ export default function MerchantDashboard() {
                   </div>
 
                    <div className="space-y-2 mt-4">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    <label className="text-base font-semibold text-slate-700 block mb-1">
                       รายการของรางวัลปัจจุบัน ({rewards.filter(r => r.isActive !== false).length})
                     </label>
                     {rewards.filter(r => r.isActive !== false).length > 0 ? (
@@ -1352,7 +1352,7 @@ export default function MerchantDashboard() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-800">
+                          <span className="text-sm font-bold text-slate-800">
                             {tx.customer?.displayName || tx.customerPhoneNumber}
                           </span>
                           <span
@@ -1369,7 +1369,7 @@ export default function MerchantDashboard() {
                             {tx.type}
                           </span>
                         </div>
-                        <div className="text-[10px] text-slate-450">
+                        <div className="text-xs text-slate-450">
                           {new Date(tx.createdAt).toLocaleString()}
                         </div>
                       </div>
@@ -1378,17 +1378,17 @@ export default function MerchantDashboard() {
                         <div className="text-right">
                           <div className="font-bold">
                             {tx.currentChange !== 0 && (
-                              <span className={tx.currentChange > 0 ? "text-emerald-600" : "text-rose-600"}>
+                              <span className={`text-sm sm:text-base font-extrabold block ${tx.currentChange > 0 ? "text-emerald-600" : "text-rose-600"}`}>
                                 {tx.currentChange > 0 ? `+${tx.currentChange}` : tx.currentChange} แต้มปกติ
                               </span>
                             )}
                             {tx.pendingChange !== 0 && (
-                              <span className={`block text-[10px] ${tx.pendingChange > 0 ? "text-indigo-650" : "text-amber-600"}`}>
+                              <span className={`block text-xs font-bold ${tx.pendingChange > 0 ? "text-indigo-650" : "text-amber-600"}`}>
                                 {tx.pendingChange > 0 ? `+${tx.pendingChange}` : tx.pendingChange} แต้มคิว
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-slate-400">
+                          <div className="text-xs font-semibold text-slate-500">
                             คงเหลือ: {tx.resultingCurrent} / {tx.resultingPending} แต้ม
                           </div>
                         </div>

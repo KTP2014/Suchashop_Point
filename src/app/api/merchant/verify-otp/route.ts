@@ -126,12 +126,13 @@ export async function POST(request: Request) {
         type: "EARN",
         addedPoints: earnPoints,
         message: `สะสมแต้มสำเร็จ (+${earnPoints} แต้ม)!`,
-        balances: result.balances,
+        balances: result.resultingBalances,
       });
     }
 
-  } catch (error: any) {
-    logger.warn("VERIFY_OTP_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("VERIFY_OTP_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

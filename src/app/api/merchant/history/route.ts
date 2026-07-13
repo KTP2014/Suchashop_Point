@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { TransactionRepository, HistoryFilter } from "../../../../features/points/repository/transactionRepository";
+import { TransactionRepository } from "../../../../features/points/repository/transactionRepository";
 import { AppError } from "../../../../lib/errors";
 import { logger } from "../../../../lib/logger";
 import { z } from "zod";
@@ -72,8 +72,9 @@ export async function GET(request: Request) {
       transactions: result.transactions,
     });
 
-  } catch (error: any) {
-    logger.error("MERCHANT_HISTORY_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("MERCHANT_HISTORY_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

@@ -1,12 +1,7 @@
 type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG";
 
-interface LogPayload {
-  eventId: string;
-  [key: string]: any;
-}
-
 class StructuredLogger {
-  private formatLog(level: LogLevel, eventId: string, payload?: Record<string, any>, error?: Error) {
+  private formatLog(level: LogLevel, eventId: string, payload?: Record<string, unknown>, error?: Error) {
     const logObject = {
       timestamp: new Date().toISOString(),
       level,
@@ -31,19 +26,19 @@ class StructuredLogger {
     }
   }
 
-  public info(eventId: string, payload?: Record<string, any>) {
+  public info(eventId: string, payload?: Record<string, unknown>) {
     this.formatLog("INFO", eventId, payload);
   }
 
-  public warn(eventId: string, payload?: Record<string, any>, error?: Error) {
+  public warn(eventId: string, payload?: Record<string, unknown>, error?: Error) {
     this.formatLog("WARN", eventId, payload, error);
   }
 
-  public error(eventId: string, payload?: Record<string, any>, error?: Error) {
+  public error(eventId: string, payload?: Record<string, unknown>, error?: Error) {
     this.formatLog("ERROR", eventId, payload, error);
   }
 
-  public debug(eventId: string, payload?: Record<string, any>) {
+  public debug(eventId: string, payload?: Record<string, unknown>) {
     if (process.env.NODE_ENV !== "production") {
       this.formatLog("DEBUG", eventId, payload);
     }

@@ -20,7 +20,7 @@ export async function secureRoute(allowedRoles: Role[]): Promise<User> {
   let payload;
   try {
     payload = await verifyToken(token);
-  } catch (error) {
+  } catch {
     throw new AuthenticationError("Authentication session is invalid or expired.");
   }
 

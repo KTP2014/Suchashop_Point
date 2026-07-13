@@ -41,6 +41,7 @@ export class AuthService {
     };
 
     const token = await signToken(payload, this.CUSTOMER_EXPIRY);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, birthdateHash, ...sanitizedUser } = user;
 
     return { token, user: sanitizedUser };

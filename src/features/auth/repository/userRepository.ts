@@ -1,5 +1,5 @@
 import { prisma } from "../../../lib/prisma";
-import { Role, User } from "@prisma/client";
+import { Role, User, Prisma } from "@prisma/client";
 
 export class UserRepository {
   /**
@@ -65,7 +65,7 @@ export class UserRepository {
    * Executed within the minimal transactional boundary inside Services.
    */
   async updateUserPointsWithLock(
-    tx: any,
+    tx: Prisma.TransactionClient,
     userId: string,
     currentPoints: number,
     pendingPoints: number,
@@ -89,7 +89,7 @@ export class UserRepository {
    * Force update point balances directly (Administrative actions)
    */
   async updateUserPointsDirect(
-    tx: any,
+    tx: Prisma.TransactionClient,
     userId: string,
     currentPoints: number,
     pendingPoints: number

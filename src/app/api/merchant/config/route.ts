@@ -25,13 +25,13 @@ const DEFAULT_REWARDS = [
   { id: "reward_3", name: "กระเป๋าผ้าพรีเมียม Sucha", points: 30 },
 ];
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     // Authenticate: any valid role can read configuration
     await secureRoute([Role.CUSTOMER, Role.STAFF, Role.ADMIN, Role.MERCHANT, Role.PENDING_APPROVAL]);
 
     const announcement = (await redis.get<string>("config:announcement")) || "ยินดีต้อนรับสู่ Sucha Shop! สะสมแต้มและแลกของรางวัลสุดพิเศษได้เลย 🐾";
-    const rewardsData = await redis.get<any[]>("config:rewards");
+    const rewardsData = await redis.get<unknown[]>("config:rewards");
     const rewards = rewardsData || DEFAULT_REWARDS;
 
     return NextResponse.json({
@@ -39,8 +39,9 @@ export async function GET(request: Request) {
       announcement,
       rewards,
     });
-  } catch (error: any) {
-    logger.error("GET_CONFIG_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("GET_CONFIG_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({
@@ -91,8 +92,9 @@ export async function POST(request: Request) {
       success: true,
       message: "บันทึกตั้งค่าระบบสำเร็จเรียบร้อยแล้ว",
     });
-  } catch (error: any) {
-    logger.error("POST_CONFIG_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("POST_CONFIG_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

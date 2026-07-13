@@ -11,9 +11,9 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  public readonly errors?: any[];
+  public readonly errors?: unknown[];
 
-  constructor(message: string, errors?: any[]) {
+  constructor(message: string, errors?: unknown[]) {
     super(message, 400, "BAD_REQUEST_VALIDATION");
     this.errors = errors;
   }

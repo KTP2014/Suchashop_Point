@@ -52,8 +52,9 @@ export async function GET(request: Request) {
       ...stats,
     });
 
-  } catch (error: any) {
-    logger.error("MERCHANT_DASHBOARD_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("MERCHANT_DASHBOARD_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

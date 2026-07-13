@@ -18,7 +18,15 @@ export class PointsMutationService {
    * Process scan and claim points from a Merchant Earn QR code.
    * Supports custom points delta defined by the generating merchant.
    */
-  async processEarnToken(customerId: string, rawToken: string): Promise<any> {
+  async processEarnToken(
+    customerId: string,
+    rawToken: string
+  ): Promise<{
+    success: boolean;
+    transactionId: string;
+    addedPoints: number;
+    resultingBalances: { currentPoints: number; pendingPoints: number };
+  }> {
     const tokenKey = `qr:token:${rawToken}`;
     const now = Math.floor(Date.now() / 1000);
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -88,8 +96,8 @@ export class PointsMutationService {
 
           const currentOld = customer.currentPoints;
           const pendingOld = customer.pendingPoints;
-          let currentNew = currentOld + pointsDelta;
-          let pendingNew = pendingOld;
+          const currentNew = currentOld + pointsDelta;
+          const pendingNew = pendingOld;
 
           const isUpdated = await this.userRepository.updateUserPointsWithLock(
             tx,
@@ -142,8 +150,9 @@ export class PointsMutationService {
             },
           };
         });
-      } catch (error: any) {
-        if (error.message === "CONCURRENCY_COLLISION") {
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg === "CONCURRENCY_COLLISION") {
           retries++;
           const delay = Math.floor(Math.random() * 20) + 50 * Math.pow(2, retries - 1);
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -158,11 +167,15 @@ export class PointsMutationService {
     throw new ConflictError("Too many concurrent updates on this account. Please scan again.");
   }
 
-  /**
-   * Process a Customer Redemption Coupon scanned by a Merchant.
-   * Consumes 5 active points (reset to 0) and refills from pending points.
-   */
-  async processScannedRedemption(merchantId: string, rawToken: string): Promise<any> {
+  async processScannedRedemption(
+    merchantId: string,
+    rawToken: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    rewardName: string;
+    balances: { currentPoints: number; pendingPoints: number };
+  }> {
     const tokenKey = `qr:token:${rawToken}`;
     const now = Math.floor(Date.now() / 1000);
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -234,10 +247,9 @@ export class PointsMutationService {
           const rewardId = tokenData?.rewardId ?? "unknown";
 
           // 1. Consolidate pending points into current points inside transaction if needed
-          let currentPoints = user.currentPoints;
-          let pendingOld = user.pendingPoints;
+          const pendingOld = user.pendingPoints;
           if (pendingOld > 0) {
-            const consolidatedUser = await tx.user.update({
+            await tx.user.update({
               where: { id: customerId },
               data: {
                 currentPoints: { increment: pendingOld },
@@ -245,7 +257,6 @@ export class PointsMutationService {
                 version: { increment: 1 },
               },
             });
-            currentPoints = consolidatedUser.currentPoints;
           }
 
           // Double check deduplication inside the transaction (prevent race conditions)
@@ -274,12 +285,12 @@ export class PointsMutationService {
                 version: { increment: 1 },
               },
             });
-          } catch (e: any) {
+          } catch {
             throw new ConflictError(`คะแนนสะสมหลักไม่เพียงพอสำหรับการแลกของรางวัล (ต้องการ ${rewardPoints} คะแนน)`);
           }
 
           // 3. Write redemption transaction ledger mapped to the scanning merchant!
-          const transaction = await this.transactionRepository.createTransaction(tx, {
+          await this.transactionRepository.createTransaction(tx, {
             customerId,
             customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
             type: TransactionType.REDEEM,
@@ -319,8 +330,9 @@ export class PointsMutationService {
             },
           };
         });
-      } catch (error: any) {
-        if (error.message === "CONCURRENCY_COLLISION") {
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg === "CONCURRENCY_COLLISION") {
           retries++;
           const delay = Math.floor(Math.random() * 20) + 50 * Math.pow(2, retries - 1);
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -338,7 +350,14 @@ export class PointsMutationService {
   /**
    * Administrative Point Reset executed by an authorized Merchant.
    */
-  async administrativeReset(customerId: string, operatorId: string): Promise<any> {
+  async administrativeReset(
+    customerId: string,
+    operatorId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    customer: { id: string; currentPoints: number; pendingPoints: number };
+  }> {
     return await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id: customerId },
@@ -353,7 +372,7 @@ export class PointsMutationService {
 
       await this.userRepository.updateUserPointsDirect(tx, customerId, 0, 0);
 
-      const transaction = await this.transactionRepository.createTransaction(tx, {
+      await this.transactionRepository.createTransaction(tx, {
         customerId,
         customerPhoneNumber: user.phoneNumber ?? (user.lineUserId ? `LINE:${user.lineUserId}` : "LINE_USER"),
         type: TransactionType.RESET,
@@ -392,7 +411,11 @@ export class PointsMutationService {
     operatorId: string,
     currentDelta: number,
     pendingDelta: number
-  ): Promise<any> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    customer: { id: string; currentPoints: number; pendingPoints: number };
+  }> {
     return await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id: customerId },

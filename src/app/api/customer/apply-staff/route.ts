@@ -52,8 +52,9 @@ export async function POST(request: Request) {
       displayName: updatedUser.displayName,
     });
 
-  } catch (error: any) {
-    logger.warn("CUSTOMER_APPLY_STAFF_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("CUSTOMER_APPLY_STAFF_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

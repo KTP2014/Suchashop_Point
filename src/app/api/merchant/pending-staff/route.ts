@@ -5,7 +5,7 @@ import { AppError } from "../../../../lib/errors";
 import { logger } from "../../../../lib/logger";
 import { Role } from "@prisma/client";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     // Authenticate caller: strictly check if caller is an ADMIN in MongoDB
     await secureRoute([Role.ADMIN]);
@@ -28,8 +28,9 @@ export async function GET(request: Request) {
       users: pendingUsers,
     });
 
-  } catch (error: any) {
-    logger.error("GET_PENDING_STAFF_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("GET_PENDING_STAFF_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

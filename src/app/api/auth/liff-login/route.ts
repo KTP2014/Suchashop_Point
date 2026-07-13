@@ -71,11 +71,12 @@ export async function POST(request: Request) {
         pendingPoints: user.pendingPoints,
       } 
     });
-  } catch (error: any) {
-    console.error("LIFF login failed:", error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("LIFF login failed:", err);
     return NextResponse.json({ 
       success: false, 
-      message: error.message || "Failed to process LIFF login." 
+      message: err.message || "Failed to process LIFF login." 
     }, { status: 500 });
   }
 }

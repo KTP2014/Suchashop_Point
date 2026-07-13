@@ -80,8 +80,9 @@ export async function POST(request: Request) {
       message: approvedRole === "REJECT" ? "ถอดถอนสิทธิ์เรียบร้อยแล้ว" : "ปรับเปลี่ยนสิทธิ์พนักงานเรียบร้อยแล้ว",
     });
 
-  } catch (error: any) {
-    logger.error("APPROVE_STAFF_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("APPROVE_STAFF_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

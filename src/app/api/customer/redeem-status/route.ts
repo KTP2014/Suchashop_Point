@@ -50,8 +50,9 @@ export async function GET(request: Request) {
       status: payload.status, // "PENDING" | "PROCESSING" | "USED"
     });
 
-  } catch (error: any) {
-    logger.error("GET_REDEEM_STATUS_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("GET_REDEEM_STATUS_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

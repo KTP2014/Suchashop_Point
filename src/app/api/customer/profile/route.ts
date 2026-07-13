@@ -5,7 +5,7 @@ import { AppError } from "../../../../lib/errors";
 import { logger } from "../../../../lib/logger";
 import { Role } from "@prisma/client";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     // Authenticate user via secure DB lookup (allow all logged-in roles to query profile)
     const user = await secureRoute([
@@ -102,8 +102,9 @@ export async function GET(request: Request) {
       redeemedRewardIds,
     });
 
-  } catch (error: any) {
-    logger.error("CUSTOMER_PROFILE_FAILED", {}, error);
+  } catch (error: unknown) {
+    const errObj = error instanceof Error ? error : new Error(String(error));
+    logger.error("CUSTOMER_PROFILE_FAILED", {}, errObj);
 
     if (error instanceof AppError) {
       return NextResponse.json({

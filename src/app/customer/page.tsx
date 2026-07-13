@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
+import type { Liff } from "@line/liff";
 import { 
   Award, Loader2, Sparkles, LogOut, Camera, XCircle, 
-  CheckCircle2, RefreshCw, Smartphone, TrendingUp, Gift, Send,
-  QrCode, Copy, Check, Users, ShieldAlert, CheckCircle
+  CheckCircle2, RefreshCw, Gift,
+  QrCode, Users, ShieldAlert, CheckCircle
 } from "lucide-react";
 
 interface ProfileData {
@@ -17,18 +18,6 @@ interface ProfileData {
   otpCode: string;
   redeemedRewardIds?: string[];
 }
-
-const CatPaw = ({ active, className = "" }: { active: boolean; className?: string }) => (
-  <svg viewBox="0 0 100 100" className={`w-12 h-12 transition-all duration-500 ${className} ${active ? "fill-[#FF7DA0] stroke-[#FF7DA0] scale-110 drop-shadow-md animate-pulse" : "fill-slate-100 stroke-slate-300"}`} strokeWidth="4">
-    {/* Main Pad */}
-    <path d="M 30,70 C 25,50 35,40 50,40 C 65,40 75,50 70,70 C 65,85 35,85 30,70 Z" />
-    {/* Toe Pads */}
-    <circle cx="22" cy="35" r="10" />
-    <circle cx="40" cy="22" r="11" />
-    <circle cx="60" cy="22" r="11" />
-    <circle cx="78" cy="35" r="10" />
-  </svg>
-);
 
 export default function CustomerDashboard() {
   const router = useRouter();
@@ -47,7 +36,7 @@ export default function CustomerDashboard() {
   };
 
   // LIFF State
-  const [liffInstance, setLiffInstance] = useState<any>(null);
+  const [liffInstance, setLiffInstance] = useState<Liff | null>(null);
 
   // Toggle State to show/hide 6-digit OTP code
   const [showOtpCode, setShowOtpCode] = useState(false);
@@ -57,7 +46,6 @@ export default function CustomerDashboard() {
   const [redeemQrUrl, setRedeemQrUrl] = useState<string | null>(null);
   const [redeemTtl, setRedeemTtl] = useState(0);
   const [generatingRedeem, setGeneratingRedeem] = useState(false);
-  const [copiedRedeem, setCopiedRedeem] = useState(false);
 
   // v3.0 Dynamic Config States
   interface Reward {
@@ -80,6 +68,50 @@ export default function CustomerDashboard() {
   const [secretCode, setSecretCode] = useState("");
   const [applyingStaff, setApplyingStaff] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await fetch("/api/customer/profile");
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push("/");
+          return;
+        }
+        throw new Error("ไม่สามารถดึงข้อมูลแต้มสะสมได้");
+      }
+      const data = await res.json();
+      if (data.success) {
+        setProfile({
+          currentPoints: data.currentPoints,
+          pendingPoints: data.pendingPoints,
+          totalPoints: data.totalPoints,
+          role: data.role,
+          otpCode: data.otpCode,
+          redeemedRewardIds: data.redeemedRewardIds || [],
+        });
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดึงข้อมูลแต้มสะสม";
+      setError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  const fetchConfig = useCallback(async () => {
+    try {
+      const res = await fetch("/api/merchant/config");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setRewards(data.rewards || []);
+          setAnnouncement(data.announcement || "");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch shop configuration:", err);
+    }
+  }, []);
 
   // Dynamic automatic redemption checking polling
   useEffect(() => {
@@ -113,50 +145,7 @@ export default function CustomerDashboard() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [activeRedeemToken]);
-
-  const fetchConfig = async () => {
-    try {
-      const res = await fetch("/api/merchant/config");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setRewards(data.rewards || []);
-          setAnnouncement(data.announcement || "");
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch shop configuration:", err);
-    }
-  };
-
-  const fetchProfile = async () => {
-    try {
-      const res = await fetch("/api/customer/profile");
-      if (!res.ok) {
-        if (res.status === 401) {
-          router.push("/");
-          return;
-        }
-        throw new Error("ไม่สามารถดึงข้อมูลแต้มสะสมได้");
-      }
-      const data = await res.json();
-      if (data.success) {
-        setProfile({
-          currentPoints: data.currentPoints,
-          pendingPoints: data.pendingPoints,
-          totalPoints: data.totalPoints,
-          role: data.role,
-          otpCode: data.otpCode,
-          redeemedRewardIds: data.redeemedRewardIds || [],
-        });
-      }
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการดึงข้อมูลแต้มสะสม");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [activeRedeemToken, fetchProfile]);
 
   useEffect(() => {
     const initLiff = async () => {
@@ -186,7 +175,7 @@ export default function CustomerDashboard() {
       }
     };
     initLiff();
-  }, [router]);
+  }, [router, fetchProfile, fetchConfig]);
 
   // Redirect admin or staff to merchant dashboard unless testing the customer view
   useEffect(() => {
@@ -201,10 +190,12 @@ export default function CustomerDashboard() {
   // Countdown timer for Customer Redemption Coupon QR
   useEffect(() => {
     if (redeemTtl <= 0) {
-      setActiveRedeemToken(null);
-      setRedeemQrUrl(null);
-      setSelectedReward(null);
-      return;
+      const timer = setTimeout(() => {
+        setActiveRedeemToken(null);
+        setRedeemQrUrl(null);
+        setSelectedReward(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
     const timer = setInterval(() => {
       setRedeemTtl((prev) => prev - 1);
@@ -228,7 +219,6 @@ export default function CustomerDashboard() {
     setGeneratingRedeem(true);
     setError(null);
     setSuccessMsg(null);
-    setCopiedRedeem(false);
 
     try {
       const res = await fetch("/api/customer/generate-redeem-qr", {
@@ -262,19 +252,13 @@ export default function CustomerDashboard() {
 
       setRedeemQrUrl(qrDataUrl);
       setRedeemTtl(300); // 5 Minutes
-    } catch (err: any) {
-      setError(err.message || "ไม่สามารถขอคูปองแลกของรางวัลได้");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "ไม่สามารถขอคูปองแลกของรางวัลได้";
+      setError(msg);
       setSelectedReward(null);
     } finally {
       setGeneratingRedeem(false);
     }
-  };
-
-  const copyRedeemTokenToClipboard = () => {
-    if (!activeRedeemToken) return;
-    navigator.clipboard.writeText(activeRedeemToken);
-    setCopiedRedeem(true);
-    setTimeout(() => setCopiedRedeem(false), 2000);
   };
 
   const startScanner = async () => {
@@ -297,12 +281,12 @@ export default function CustomerDashboard() {
         try {
           const parsed = JSON.parse(decodedText);
           if (parsed.token) targetToken = parsed.token;
-        } catch (e) {
+        } catch {
           // Raw text fallback
         }
         await processScannedToken(targetToken);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("LIFF scanning failed:", err);
       showToast("การสแกนโค้ดล้มเหลว หรือไม่ได้รับอนุญาตให้ใช้กล้อง", "error");
     } finally {
@@ -330,8 +314,9 @@ export default function CustomerDashboard() {
 
       showToast(`🎉 สะสมแต้มสำเร็จเพิ่มอีก +${data.addedPoints} แต้ม!`, "success");
       await fetchProfile();
-    } catch (err: any) {
-      showToast(err.message || "ไม่สามารถสะสมแต้มจากรหัสนี้ได้", "error");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "ไม่สามารถสะสมแต้มจากรหัสนี้ได้";
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -363,11 +348,12 @@ export default function CustomerDashboard() {
         throw new Error(data.message || "สมัครสิทธิ์พนักงานไม่สำเร็จ");
       }
 
-      setSuccessMsg("ส่งคำขอสมัครพนักงานเสร็จสิ้น กรุณารอแอดมินอนุมัติสิทธิ์");
+      setSuccessMsg("ส่งคำขอสมัครพนักงานเสสิ้น กรุณารอแอดมินอนุมัติสิทธิ์");
       setShowApplyModal(false);
       await fetchProfile();
-    } catch (err: any) {
-      setApplyError(err.message || "เกิดข้อผิดพลาดในการสมัครสิทธิ์");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสมัครสิทธิ์";
+      setApplyError(msg);
     } finally {
       setApplyingStaff(false);
     }
@@ -421,8 +407,6 @@ export default function CustomerDashboard() {
     );
   }
 
-  const currentPoints = profile?.currentPoints ?? 0;
-  const pendingPoints = profile?.pendingPoints ?? 0;
   const formatOtp = (code: string) => {
     if (!code || code.length !== 6) return code;
     return `${code.slice(0, 3)}-${code.slice(3)}`;
@@ -516,6 +500,7 @@ export default function CustomerDashboard() {
             </div>
 
             <div className="p-3 bg-[#F9F9F9] border border-pink-100/30 rounded-2xl shadow-inner">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={redeemQrUrl} alt="คูปอง QR Code สำหรับแลกของรางวัล" className="w-52 h-52 rounded-xl" />
             </div>
 

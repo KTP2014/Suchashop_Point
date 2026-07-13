@@ -1,21 +1,21 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { Html5Qrcode } from "html5-qrcode";
 import {
-  Award, Loader2, RefreshCw, Smartphone, TrendingUp,
-  Gift, ShieldAlert, ArrowLeftRight, Search, ListFilter,
-  CheckCircle2, XCircle, Trash2, LogOut, QrCode, Copy, Check, Camera, Send,
-  Users, CheckCircle, Sparkles
+  Award, Loader2, RefreshCw, Smartphone,
+  Gift, ShieldAlert, ArrowLeftRight, Search,
+  CheckCircle2, XCircle, Trash2, LogOut, QrCode, Camera, Send,
+  Users, Sparkles
 } from "lucide-react";
 
 interface TransactionItem {
   id: string;
   customerId: string;
   customerPhoneNumber: string;
-  type: "EARN" | "REDEEM" | "RESET" | "ADJUSTMENT";
+  type: "EARN" | "REDEEM" | "RESET" | "ADJUSTMENT" | string;
   currentChange: number;
   pendingChange: number;
   resultingCurrent: number;
@@ -42,6 +42,22 @@ interface ConfirmModalState {
   danger?: boolean;
 }
 
+interface Reward {
+  id: string;
+  name: string;
+  points: number;
+  isActive?: boolean;
+}
+
+interface StaffMember {
+  id: string;
+  displayName: string | null;
+  phoneNumber: string | null;
+  lineUserId: string | null;
+  role: string;
+  createdAt: string;
+}
+
 export default function MerchantDashboard() {
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -52,14 +68,6 @@ export default function MerchantDashboard() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  // Custom Toast State
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
-  const showToast = (msg: string, type: "success" | "error") => {
-    setToast({ message: msg, type });
-    const timer = setTimeout(() => setToast({ message: "", type: null }), 4000);
-    return timer;
-  };
 
   // Search & Pagination History State
   const [searchName, setSearchName] = useState("");
@@ -73,12 +81,9 @@ export default function MerchantDashboard() {
   const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
   const [qrTtl, setQrTtl] = useState(0);
   const [generatingQR, setGeneratingQR] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Scanning Customer Redemption State
   const [scanningRedeem, setScanningRedeem] = useState(false);
-  const [manualRedeemToken, setManualRedeemToken] = useState("");
-  const [processingManualRedeem, setProcessingManualRedeem] = useState(false);
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
   // OTP Verification State (Camera-less backup)
@@ -93,7 +98,7 @@ export default function MerchantDashboard() {
   const [loadingPendingStaff, setLoadingPendingStaff] = useState(false);
 
   // Admin Staff Management List State
-  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [loadingStaffMembers, setLoadingStaffMembers] = useState(false);
 
   // Admin God Mode State
@@ -101,7 +106,7 @@ export default function MerchantDashboard() {
   const [processingGodMode, setProcessingGodMode] = useState(false);
 
   // v3.0 Dynamic Config States
-  const [rewards, setRewards] = useState<any[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [announcement, setAnnouncement] = useState<string>("");
   const [newRewardName, setNewRewardName] = useState<string>("");
   const [newRewardPoints, setNewRewardPoints] = useState<string>("10");
@@ -141,7 +146,7 @@ export default function MerchantDashboard() {
     });
   };
 
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       const res = await fetch("/api/merchant/config");
       if (res.ok) {
@@ -154,7 +159,95 @@ export default function MerchantDashboard() {
     } catch (err) {
       console.error("Failed to fetch shop configurations:", err);
     }
-  };
+  }, []);
+
+  const fetchPendingStaff = useCallback(async () => {
+    setLoadingPendingStaff(true);
+    try {
+      const res = await fetch("/api/merchant/pending-staff");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setPendingStaff(data.users || []);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPendingStaff(false);
+    }
+  }, []);
+
+  const fetchStaffList = useCallback(async () => {
+    setLoadingStaffMembers(true);
+    try {
+      const res = await fetch("/api/merchant/staff-list");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setStaffMembers(data.users || []);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch staff list:", err);
+    } finally {
+      setLoadingStaffMembers(false);
+    }
+  }, []);
+
+  const checkUserAccess = useCallback(async () => {
+    try {
+      const res = await fetch("/api/customer/profile");
+      if (!res.ok) {
+        router.push("/");
+        return;
+      }
+      const data = await res.json();
+      if (data.success) {
+        if (data.role === "ADMIN" || data.role === "STAFF" || data.role === "MERCHANT") {
+          setUserRole(data.role);
+          setUserName(data.displayName || "ผู้จัดการ");
+          setLoadingUser(false);
+          await fetchConfig(); // Load rewards and announcement on mount
+          if (data.role === "ADMIN") {
+            await fetchPendingStaff();
+            await fetchStaffList();
+          }
+        } else {
+          router.push("/customer");
+        }
+      }
+    } catch {
+      router.push("/");
+    }
+  }, [router, fetchConfig, fetchPendingStaff, fetchStaffList]);
+
+  const fetchHistory = useCallback(async (targetPage = page) => {
+    setLoadingHistory(true);
+    let queryParams = `?page=${targetPage}&limit=6`;
+    if (searchName.trim()) {
+      queryParams += `&searchName=${encodeURIComponent(searchName.trim())}`;
+    }
+    if (actionType) {
+      queryParams += `&actionType=${actionType}`;
+    }
+
+    try {
+      const res = await fetch(`/api/merchant/history${queryParams}`);
+      if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลประวัติการทำรายการได้");
+      const data = await res.json();
+      if (data.success) {
+        setHistory(data.transactions);
+        setTotalPages(data.pagination.totalPages);
+        setPage(data.pagination.page);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดึงข้อมูลประวัติ";
+      setError(msg);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [page, searchName, actionType]);
 
   const handleSaveConfig = async (updatedRewards = rewards, updatedAnnouncement = announcement) => {
     setSavingConfig(true);
@@ -175,8 +268,9 @@ export default function MerchantDashboard() {
       }
       setSuccess("บันทึกประกาศร้านค้าและรายการของรางวัลเรียบร้อยแล้ว!");
       await fetchConfig();
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+      setError(msg);
     } finally {
       setSavingConfig(false);
     }
@@ -214,67 +308,6 @@ export default function MerchantDashboard() {
     handleSaveConfig(updatedRewards, announcement);
   };
 
-  const checkUserAccess = async () => {
-    try {
-      const res = await fetch("/api/customer/profile");
-      if (!res.ok) {
-        router.push("/");
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
-        if (data.role === "ADMIN" || data.role === "STAFF" || data.role === "MERCHANT") {
-          setUserRole(data.role);
-          setUserName(data.displayName || "ผู้จัดการ");
-          setLoadingUser(false);
-          await fetchConfig(); // Load rewards and announcement on mount
-          if (data.role === "ADMIN") {
-            fetchPendingStaff();
-            fetchStaffList();
-          }
-        } else {
-          router.push("/customer");
-        }
-      }
-    } catch (err) {
-      router.push("/");
-    }
-  };
-
-  const fetchPendingStaff = async () => {
-    setLoadingPendingStaff(true);
-    try {
-      const res = await fetch("/api/merchant/pending-staff");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setPendingStaff(data.users || []);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingPendingStaff(false);
-    }
-  };
-
-  const fetchStaffList = async () => {
-    setLoadingStaffMembers(true);
-    try {
-      const res = await fetch("/api/merchant/staff-list");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setStaffMembers(data.users || []);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch staff list:", err);
-    } finally {
-      setLoadingStaffMembers(false);
-    }
-  };
-
   const handleApproveStaff = async (userId: string, approvedRole: "STAFF" | "ADMIN" | "REJECT", displayName: string) => {
     let actionLabel = "";
     if (approvedRole === "STAFF") actionLabel = "ตั้งค่าเป็นพนักงาน (Staff)";
@@ -300,48 +333,31 @@ export default function MerchantDashboard() {
           setSuccess(`ทำรายการ [${actionLabel}] ให้กับคุณ ${displayName} สำเร็จ!`);
           await fetchPendingStaff();
           await fetchStaffList();
-        } catch (err: any) {
-          setError(err.message || "เกิดข้อผิดพลาดในการทำรายการปรับบทบาท");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการทำรายการปรับบทบาท";
+          setError(msg);
         }
       }
     );
   };
 
-  const fetchHistory = async (targetPage = page) => {
-    setLoadingHistory(true);
-    let queryParams = `?page=${targetPage}&limit=6`;
-    if (searchName.trim()) {
-      queryParams += `&searchName=${encodeURIComponent(searchName.trim())}`;
-    }
-    if (actionType) {
-      queryParams += `&actionType=${actionType}`;
-    }
-
-    try {
-      const res = await fetch(`/api/merchant/history${queryParams}`);
-      if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลประวัติการทำรายการได้");
-      const data = await res.json();
-      if (data.success) {
-        setHistory(data.transactions);
-        setTotalPages(data.pagination.totalPages);
-        setPage(data.pagination.page);
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
   useEffect(() => {
-    checkUserAccess();
-    fetchHistory(1);
+    const checkAccessAndHistory = async () => {
+      await checkUserAccess();
+      await fetchHistory(1);
+    };
+
+    const timer = setTimeout(() => {
+      checkAccessAndHistory();
+    }, 0);
+
     return () => {
+      clearTimeout(timer);
       if (qrScannerRef.current && qrScannerRef.current.isScanning) {
         qrScannerRef.current.stop().catch(console.error);
       }
     };
-  }, [actionType]);
+  }, [actionType, checkUserAccess, fetchHistory]);
 
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
@@ -350,7 +366,7 @@ export default function MerchantDashboard() {
       }
     }, 450);
     return () => clearTimeout(delayDebounce);
-  }, [searchName]);
+  }, [searchName, userRole, fetchHistory]);
 
   useEffect(() => {
     if (success) {
@@ -368,9 +384,11 @@ export default function MerchantDashboard() {
 
   useEffect(() => {
     if (qrTtl <= 0) {
-      setActiveQR(null);
-      setQrBlobUrl(null);
-      return;
+      const timer = setTimeout(() => {
+        setActiveQR(null);
+        setQrBlobUrl(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
     const timer = setInterval(() => {
       setQrTtl((prev) => prev - 1);
@@ -387,7 +405,6 @@ export default function MerchantDashboard() {
     setGeneratingQR(true);
     setError(null);
     setSuccess(null);
-    setCopied(false);
 
     try {
       const res = await fetch("/api/merchant/generate-earn-qr", {
@@ -416,18 +433,12 @@ export default function MerchantDashboard() {
 
       setQrBlobUrl(qrDataUrl);
       setQrTtl(300); // 5 Minutes
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการสร้าง QR สะสมแต้ม");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสร้าง QR สะสมแต้ม";
+      setError(msg);
     } finally {
       setGeneratingQR(false);
     }
-  };
-
-  const copyTokenToClipboard = () => {
-    if (!activeQR) return;
-    navigator.clipboard.writeText(activeQR);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const startRedeemScanner = async () => {
@@ -462,7 +473,7 @@ export default function MerchantDashboard() {
             try {
               const parsed = JSON.parse(decodedText);
               if (parsed.token) targetToken = parsed.token;
-            } catch (e) {
+            } catch {
               // Raw text fallback
             }
             await stopRedeemScanner();
@@ -470,7 +481,7 @@ export default function MerchantDashboard() {
           },
           () => {}
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Redeem scanner failed to start:", err);
         setError("กล้องมีปัญหา หรือกำลังใช้งานโดยแอปพลิเคชันอื่นอยู่");
         setScanningRedeem(false);
@@ -482,20 +493,11 @@ export default function MerchantDashboard() {
     if (qrScannerRef.current && qrScannerRef.current.isScanning) {
       try {
         await qrScannerRef.current.stop();
-      } catch (err) {
-        console.error(err);
+      } catch {
+        // Suppress scanner stop error
       }
     }
     setScanningRedeem(false);
-  };
-
-  const handleManualRedeemSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualRedeemToken.trim()) return;
-    setProcessingManualRedeem(true);
-    await processRedemptionCoupon(manualRedeemToken.trim());
-    setManualRedeemToken("");
-    setProcessingManualRedeem(false);
   };
 
   const processRedemptionCoupon = async (token: string) => {
@@ -522,8 +524,9 @@ export default function MerchantDashboard() {
         type: "REDEEM",
       });
       await fetchHistory(page);
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการประมวลผลคูปองแลกรางวัล");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการประมวลผลคูปองแลกรางวัล";
+      setError(msg);
     }
   };
 
@@ -592,8 +595,9 @@ export default function MerchantDashboard() {
           setOtpCode("");
           setSelectedOtpRewardId("");
           await fetchHistory(page);
-        } catch (err: any) {
-          setError(err.message || "เกิดข้อผิดพลาดในการตรวจสอบรหัส OTP");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการตรวจสอบรหัส OTP";
+          setError(msg);
         } finally {
           setVerifyingOtp(false);
         }
@@ -620,8 +624,9 @@ export default function MerchantDashboard() {
           }
           setSuccess(`ล้างแต้มลูกค้าทั้งหมดสำเร็จ (${data.count} บัญชี)`);
           await fetchHistory(page);
-        } catch (err: any) {
-          setError(err.message || "เกิดข้อผิดพลาดในการรีเซ็ตแต้ม");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการรีเซ็ตแต้ม";
+          setError(msg);
         } finally {
           setProcessingGodMode(false);
         }
@@ -660,8 +665,9 @@ export default function MerchantDashboard() {
             type: "EARN",
           });
           await fetchHistory(page);
-        } catch (err: any) {
-          setError(err.message || "เกิดข้อผิดพลาดในการแจกแต้ม");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการแจกแต้ม";
+          setError(msg);
         } finally {
           setProcessingGodMode(false);
         }
@@ -689,8 +695,9 @@ export default function MerchantDashboard() {
           }
           setSuccess(`ล้างแต้มของคุณ ${customerPhone} สำเร็จ!`);
           await fetchHistory(page);
-        } catch (err: any) {
-          setError(err.message || "เกิดข้อผิดพลาดในการล้างแต้มลูกค้า");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการล้างแต้มลูกค้า";
+          setError(msg);
         }
       },
       true
@@ -802,6 +809,7 @@ export default function MerchantDashboard() {
               {qrBlobUrl && activeQR ? (
                 <div className="flex flex-col items-center space-y-3 w-full animate-fade-in">
                   <div className="p-2.5 bg-white border border-pink-100 rounded-2xl shadow-inner">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={qrBlobUrl} alt="คิวอาร์โค้ดสำหรับสะสมแต้ม" className="w-44 h-44 rounded-xl" />
                   </div>
                   <div className="text-center">

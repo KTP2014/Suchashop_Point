@@ -1,5 +1,5 @@
 import { prisma } from "../../../lib/prisma";
-import { Transaction, TransactionType } from "@prisma/client";
+import { Transaction, TransactionType, Prisma } from "@prisma/client";
 
 export interface HistoryFilter {
   page: number;
@@ -10,12 +10,18 @@ export interface HistoryFilter {
   sortOrder?: "asc" | "desc";
 }
 
+export interface TransactionWithCustomer extends Transaction {
+  customer?: {
+    displayName: string | null;
+  } | null;
+}
+
 export class TransactionRepository {
   /**
    * Insert a new points mutation transaction entry inside an active transaction database scope.
    */
   async createTransaction(
-    tx: any,
+    tx: Prisma.TransactionClient,
     data: {
       customerId: string;
       customerPhoneNumber: string;
@@ -50,11 +56,11 @@ export class TransactionRepository {
   async findMerchantHistory(
     operatorId: string | null | undefined,
     filter: HistoryFilter
-  ): Promise<{ transactions: any[]; total: number }> {
+  ): Promise<{ transactions: TransactionWithCustomer[]; total: number }> {
     const { page, limit, searchName, actionType, sortBy = "createdAt", sortOrder = "desc" } = filter;
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Prisma.TransactionWhereInput = {
       ...(operatorId && { operatorId }),
       ...(actionType && { type: actionType }),
       ...(searchName && {
@@ -82,7 +88,7 @@ export class TransactionRepository {
             },
           },
         },
-      }),
+      }) as Promise<TransactionWithCustomer[]>,
       prisma.transaction.count({ where }),
     ]);
 

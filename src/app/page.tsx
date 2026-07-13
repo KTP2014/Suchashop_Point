@@ -1,22 +1,21 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Loader2, Phone, Calendar, Lock, UserCheck, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
+import type { Liff } from "@line/liff";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // LIFF States
-  const [liffInstance, setLiffInstance] = useState<any>(null);
+  const [liffInstance, setLiffInstance] = useState<Liff | null>(null);
   const [liffLoading, setLiffLoading] = useState(true);
 
-  const processLiffLogin = async (liff: any) => {
+  const processLiffLogin = useCallback(async (liff: Liff) => {
     try {
-      setLoading(true);
       setError(null);
       const profile = await liff.getProfile();
       const lineUserId = profile.userId;
@@ -43,13 +42,12 @@ export default function LoginPage() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || "การเข้าสู่ระบบ LIFF ล้มเหลว");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("LIFF login processing failed", err);
-      setError(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อล็อกอินกับระบบ");
-    } finally {
-      setLoading(false);
+      const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อล็อกอินกับระบบ";
+      setError(msg);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     const initLiff = async () => {
@@ -74,7 +72,7 @@ export default function LoginPage() {
       }
     };
     initLiff();
-  }, [router]);
+  }, [processLiffLogin]);
 
   const handleLiffLogin = async () => {
     if (!liffInstance) return;

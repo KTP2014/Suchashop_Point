@@ -29,9 +29,6 @@ export async function POST(request: Request) {
 
     const { points } = parsed.data;
 
-    // Load maximum points limit dynamically from configuration environment variables
-    const maxPoints = Number(process.env.NEXT_PUBLIC_MAX_POINTS || 5);
-
     // 1. Fetch all customer, staff, and admin accounts (acting as point collectors)
     const targetRoles = [Role.CUSTOMER, Role.STAFF, Role.ADMIN];
     const customers = await prisma.user.findMany({
@@ -79,7 +76,7 @@ export async function POST(request: Request) {
           version: { increment: 1 },
         },
       }),
-      prisma.transaction.createMany({ data: transactionsData }) as any,
+      prisma.transaction.createMany({ data: transactionsData }),
     ]);
 
     logger.info("ADMIN_ADD_POINTS_ALL_SUCCESS", { adminId, addedPoints: points, count: customers.length });
@@ -90,8 +87,9 @@ export async function POST(request: Request) {
       message: `เพิ่มแต้มให้กับลูกค้าทั้งหมดสำเร็จ (+${points} แต้ม, ${customers.length} บัญชี)`,
     });
 
-  } catch (error: any) {
-    logger.error("ADMIN_ADD_POINTS_ALL_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("ADMIN_ADD_POINTS_ALL_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

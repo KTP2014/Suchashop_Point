@@ -49,8 +49,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
 
-  } catch (error: any) {
-    logger.warn("MERCHANT_SCAN_REDEEM_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("MERCHANT_SCAN_REDEEM_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

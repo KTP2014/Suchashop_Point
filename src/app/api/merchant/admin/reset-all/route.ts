@@ -5,7 +5,7 @@ import { AppError } from "../../../../../lib/errors";
 import { logger } from "../../../../../lib/logger";
 import { Role, TransactionType } from "@prisma/client";
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
     // Authenticate caller: strictly check if caller is an ADMIN in MongoDB
     const admin = await secureRoute([Role.ADMIN]);
@@ -69,8 +69,9 @@ export async function POST(request: Request) {
       message: `รีเซ็ตแต้มลูกค้าทั้งหมดสำเร็จ (${customers.length} บัญชี)`,
     });
 
-  } catch (error: any) {
-    logger.error("ADMIN_RESET_ALL_POINTS_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("ADMIN_RESET_ALL_POINTS_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

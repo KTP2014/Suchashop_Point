@@ -60,7 +60,7 @@ export async function middleware(request: NextRequest) {
           headers: requestHeaders,
         },
       });
-    } catch (error) {
+    } catch {
       return handleUnauthorized(request, "Invalid or expired session token.");
     }
   }

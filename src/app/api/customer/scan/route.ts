@@ -49,8 +49,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
 
-  } catch (error: any) {
-    logger.warn("CUSTOMER_SCAN_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("CUSTOMER_SCAN_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

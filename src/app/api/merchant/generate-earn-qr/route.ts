@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         }
         points = parsed.data?.points ?? 1;
       }
-    } catch (e) {
+    } catch {
       // Body empty or malformed, fallback to default points = 1
     }
 
@@ -62,8 +62,9 @@ export async function POST(request: Request) {
       points,
     });
 
-  } catch (error: any) {
-    logger.error("MERCHANT_GENERATE_QR_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("MERCHANT_GENERATE_QR_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

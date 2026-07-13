@@ -88,8 +88,9 @@ export async function POST(request: Request) {
       expiresAt: result.expiresAt.toISOString(),
     });
 
-  } catch (error: any) {
-    logger.error("CUSTOMER_GENERATE_REDEEM_QR_FAILED", {}, error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("CUSTOMER_GENERATE_REDEEM_QR_FAILED", {}, err);
 
     if (error instanceof AppError) {
       return NextResponse.json({

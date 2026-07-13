@@ -3,12 +3,12 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import type { Liff } from "@line/liff";
 import { 
   Award, Loader2, Sparkles, LogOut, Camera, XCircle, 
   CheckCircle2, RefreshCw, Gift,
   QrCode, Users, ShieldAlert, CheckCircle
 } from "lucide-react";
+import { useLiff } from "../providers";
 
 interface ProfileData {
   currentPoints: number;
@@ -35,8 +35,24 @@ export default function CustomerDashboard() {
     return timer;
   };
 
-  // LIFF State
-  const [liffInstance, setLiffInstance] = useState<Liff | null>(null);
+  // Success Modal State
+  interface SuccessModalState {
+    isOpen: boolean;
+    title: string;
+    pointsText?: string;
+    detailsText: string;
+    type?: "EARN" | "REDEEM" | string | null;
+  }
+  const [successModal, setSuccessModal] = useState<SuccessModalState>({
+    isOpen: false,
+    title: "",
+    pointsText: "",
+    detailsText: "",
+    type: null,
+  });
+
+  // LIFF State from Global Context
+  const { liff: liffInstance, isLoading: liffLoading } = useLiff();
 
   // Toggle State to show/hide 6-digit OTP code
   const [showOtpCode, setShowOtpCode] = useState(false);
@@ -123,7 +139,13 @@ export default function CustomerDashboard() {
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.status === "USED") {
-            showToast("🎉 แลกของรางวัลสำเร็จเรียบร้อยแล้ว!", "success");
+            setSuccessModal({
+              isOpen: true,
+              title: "แลกของรางวัลสำเร็จ! 🐾",
+              pointsText: selectedReward?.name || "ของรางวัล",
+              detailsText: "ทำการแลกรับสิทธิ์เรียบร้อยแล้ว ยอดคะแนนสะสมรวมของคุณยังคงอยู่ครบถ้วน",
+              type: "REDEEM",
+            });
             setActiveRedeemToken(null);
             setRedeemQrUrl(null);
             setRedeemTtl(0);
@@ -145,37 +167,23 @@ export default function CustomerDashboard() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [activeRedeemToken, fetchProfile]);
+  }, [activeRedeemToken, fetchProfile, selectedReward]);
 
   useEffect(() => {
-    const initLiff = async () => {
-      try {
-        const liff = (await import("@line/liff")).default;
-        const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-        if (!liffId) {
-          console.error("LIFF ID is missing in environment variables.");
-          setSyncingSession(false);
-          return;
-        }
-        await liff.init({ liffId });
-        setLiffInstance(liff);
+    const checkLiffSession = async () => {
+      if (liffLoading) return;
 
-        if (!liff.isLoggedIn()) {
-          router.push("/");
-          return;
-        }
-
-        setSyncingSession(false);
-        await fetchProfile();
-        await fetchConfig(); // Load rewards and announcement on load
-      } catch (err) {
-        console.error("LIFF initialization failed on customer dashboard", err);
-        setError("เกิดข้อผิดพลาดในการเชื่อมต่อ LINE LIFF");
-        setSyncingSession(false);
+      if (!liffInstance || !liffInstance.isLoggedIn()) {
+        router.push("/");
+        return;
       }
+
+      setSyncingSession(false);
+      await fetchProfile();
+      await fetchConfig(); // Load rewards and announcement on load
     };
-    initLiff();
-  }, [router, fetchProfile, fetchConfig]);
+    checkLiffSession();
+  }, [liffInstance, liffLoading, router, fetchProfile, fetchConfig]);
 
   // Redirect admin or staff to merchant dashboard unless testing the customer view
   useEffect(() => {
@@ -312,7 +320,13 @@ export default function CustomerDashboard() {
         throw new Error(data.message || "การรับแต้มถูกปฏิเสธ");
       }
 
-      showToast(`🎉 สะสมแต้มสำเร็จเพิ่มอีก +${data.addedPoints} แต้ม!`, "success");
+      setSuccessModal({
+        isOpen: true,
+        title: "สะสมแต้มสำเร็จ! 🐾",
+        pointsText: `+${data.addedPoints} แต้ม`,
+        detailsText: `ยินดีด้วย! คุณได้รับแต้มสะสมเพิ่มจำนวน +${data.addedPoints} แต้มเข้าสู่ระบบเรียบร้อยแล้ว`,
+        type: "EARN",
+      });
       await fetchProfile();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "ไม่สามารถสะสมแต้มจากรหัสนี้ได้";
@@ -761,6 +775,54 @@ export default function CustomerDashboard() {
           </div>
         </div>
       )}
+
+      {/* =================================================================
+         CUSTOMER PREMIUM SUCCESS POPUP MODAL
+         ================================================================= */}
+      {successModal.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-pink-100/50 w-full max-w-sm rounded-3xl p-8 shadow-2xl space-y-6 animate-scale-up text-center flex flex-col items-center">
+            
+            {/* Huge Success Icon */}
+            <div className={`p-4 rounded-full ${
+              successModal.type === "EARN" 
+                ? "bg-emerald-50 text-emerald-500" 
+                : "bg-pink-50 text-[#FF7DA0]"
+            } animate-bounce`}>
+              <CheckCircle2 className="w-16 h-16 stroke-[2.5]" />
+            </div>
+
+            {/* Title */}
+            <div className="space-y-1">
+              <h3 className="text-lg font-extrabold text-slate-800">{successModal.title}</h3>
+              <p className="text-xs text-slate-500 font-semibold leading-relaxed">{successModal.detailsText}</p>
+            </div>
+
+            {/* High-Contrast Points/Reward Text */}
+            <div className="py-4 w-full bg-slate-50 rounded-2xl border border-slate-100/50 shadow-inner flex flex-col items-center justify-center">
+              <span className={`text-3xl font-black tracking-tight ${
+                successModal.type === "EARN" 
+                  ? "text-emerald-600" 
+                  : "text-[#FF7DA0]"
+              }`}>
+                {successModal.pointsText}
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5">
+                {successModal.type === "EARN" ? "คะแนนที่ได้รับ" : "ของรางวัลที่แลก"}
+              </span>
+            </div>
+
+            {/* Full-width Close Button */}
+            <button
+              onClick={() => setSuccessModal(prev => ({ ...prev, isOpen: false }))}
+              className="w-full py-3.5 bg-gradient-to-r from-[#FF7DA0] to-pink-600 hover:from-pink-500 hover:to-pink-700 text-white rounded-2xl font-bold shadow-lg shadow-pink-500/10 cursor-pointer transition-all duration-300 active:scale-[0.98] text-base"
+            >
+              ตกลง
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Custom floating Toast notification */}
       {toast.type && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold text-white border animate-toast-in ${

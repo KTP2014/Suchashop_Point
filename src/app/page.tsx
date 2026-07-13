@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ShieldAlert } from "lucide-react";
 import type { Liff } from "@line/liff";
+import { useLiff } from "./providers";
 
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
-  // LIFF States
-  const [liffInstance, setLiffInstance] = useState<Liff | null>(null);
-  const [liffLoading, setLiffLoading] = useState(true);
+  const { liff: liffInstance, isLoading: liffLoading } = useLiff();
 
   const processLiffLogin = useCallback(async (liff: Liff) => {
     try {
@@ -50,29 +49,13 @@ export default function LoginPage() {
   }, [router]);
 
   useEffect(() => {
-    const initLiff = async () => {
-      try {
-        const liff = (await import("@line/liff")).default;
-        const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-        if (!liffId) {
-          console.error("LIFF ID is missing in environment variables.");
-          setLiffLoading(false);
-          return;
-        }
-        await liff.init({ liffId });
-        setLiffInstance(liff);
-        setLiffLoading(false);
-
-        if (liff.isLoggedIn()) {
-          await processLiffLogin(liff);
-        }
-      } catch (err) {
-        console.error("LIFF initialization failed", err);
-        setLiffLoading(false);
-      }
-    };
-    initLiff();
-  }, [processLiffLogin]);
+    if (liffInstance && liffInstance.isLoggedIn()) {
+      const timer = setTimeout(() => {
+        processLiffLogin(liffInstance);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [liffInstance, processLiffLogin]);
 
   const handleLiffLogin = async () => {
     if (!liffInstance) return;

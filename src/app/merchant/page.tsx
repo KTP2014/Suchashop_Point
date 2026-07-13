@@ -396,6 +396,40 @@ export default function MerchantDashboard() {
     return () => clearInterval(timer);
   }, [qrTtl]);
 
+  // Polling status of pending points earning QR code
+  useEffect(() => {
+    if (!activeQR) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/merchant/qr-status?token=${activeQR}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.status === "USED") {
+            setSuccessModal({
+              isOpen: true,
+              title: "สะสมแต้มสำเร็จ! 🐾",
+              pointsText: `+${data.points} แต้ม`,
+              detailsText: `ลูกค้า ${data.customerName || "ผู้ใช้งาน"} สแกนรับแต้มสะสมเรียบร้อยแล้ว`,
+              type: "EARN",
+            });
+            // Reset QR code states safely
+            setTimeout(() => {
+              setActiveQR(null);
+              setQrBlobUrl(null);
+              setQrTtl(0);
+            }, 0);
+            await fetchHistory(page);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling QR earn status:", err);
+      }
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [activeQR, page, fetchHistory]);
+
   const handleLogout = () => {
     document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
     router.push("/");
@@ -785,7 +819,7 @@ export default function MerchantDashboard() {
 
               {/* Point Input selector (1 to 5) */}
               <div className="w-full space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                <label className="text-base font-semibold text-slate-700 block mb-1">
                   ระบุจำนวนแต้มสะสม (+{pointsToGrant} แต้ม)
                 </label>
                 <div className="grid grid-cols-5 gap-2">

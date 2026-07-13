@@ -727,7 +727,7 @@ export default function MerchantDashboard() {
               <Award className="w-5 h-5 text-white" />
             </div>
             <div className="flex flex-col text-left">
-              <span className="font-bold text-sm tracking-tight text-slate-800">Sucha Shop ระบบหลังร้าน</span>
+              <span className="font-bold text-sm tracking-tight text-slate-800">Sucha ระบบหลังร้าน</span>
               <span className="text-[9px] text-slate-500 font-semibold">
                 พนักงาน: {userName} • สิทธิ์: {userRole === "ADMIN" ? "ผู้ดูแลระบบ (Admin)" : "พนักงานร้าน (Staff)"}
               </span>
@@ -738,7 +738,7 @@ export default function MerchantDashboard() {
               onClick={() => router.push("/customer?test=true")}
               className="px-3.5 py-2 text-xs font-bold text-[#FF7DA0] bg-pink-50 hover:bg-pink-100/80 border border-pink-150 rounded-xl transition-all cursor-pointer"
             >
-              หน้าลูกค้า (Test)
+              หน้าลูกค้า
             </button>
             <button
               onClick={handleLogout}
@@ -906,7 +906,7 @@ export default function MerchantDashboard() {
                   >
                     สะสมแต้ม (Earn)
                   </button>
-                  <button
+                  {/*<button
                     type="button"
                     onClick={() => setOtpActionType("REDEEM")}
                     className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
@@ -916,7 +916,7 @@ export default function MerchantDashboard() {
                     }`}
                   >
                     แลกรางวัล (Redeem)
-                  </button>
+                  </button>*/}
                 </div>
 
                 {otpActionType === "EARN" && (
@@ -987,14 +987,14 @@ export default function MerchantDashboard() {
               <div className="bg-white border border-pink-100/50 p-6 rounded-3xl shadow-sm space-y-6 text-left">
                 <div className="flex items-center gap-2 border-b border-pink-50 pb-3">
                   <Users className="w-5 h-5 text-amber-500 animate-pulse" />
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                  <h3 className="text-lg font-bold uppercase tracking-wider text-slate-800">
                     แผงควบคุมระบบ (Admin Console)
                   </h3>
                 </div>
 
                 {/* A. Pending Staff Approvals Panel */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-700">
+                  <h4 className="text-base font-bold text-slate-700">
                     คำขออนุมัติสิทธิ์พนักงานร้าน
                   </h4>
                   
@@ -1050,7 +1050,7 @@ export default function MerchantDashboard() {
 
                 {/* B. Staff Management Panel */}
                 <div className="pt-4 border-t border-pink-50 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-700">
+                  <h4 className="text-base font-bold text-slate-700">
                     รายชื่อพนักงานในระบบทั้งหมด
                   </h4>
 
@@ -1121,8 +1121,8 @@ export default function MerchantDashboard() {
                 <div className="pt-5 border-t border-pink-50 space-y-4">
                   <div className="flex items-center gap-1.5 text-rose-500">
                     <ShieldAlert className="w-4 h-4 animate-pulse" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider">
-                      โหมดผู้ดูแลระบบสูงสุด (God Mode)
+                    <h4 className="text-base font-bold uppercase tracking-wider">
+                      โหมดผู้ดูแลระบบสูงสุด
                     </h4>
                   </div>
 
@@ -1130,11 +1130,11 @@ export default function MerchantDashboard() {
                     {/* Add point to all customers card */}
                     <div className="p-4 bg-slate-50 border border-pink-100/20 rounded-2xl flex flex-col justify-between space-y-4 hover:border-pink-100/50 transition-all">
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-[#FF7DA0] uppercase tracking-wider block">
+                        <span className="text-sm font-bold text-[#FF7DA0] uppercase tracking-wider block">
                           เพิ่มแต้มแจกทุกคน
                         </span>
-                        <p className="text-[9px] text-slate-500 leading-relaxed">
-                          เพิ่มจำนวนแต้ม (+1 ถึง +5) ให้กับลูกค้า พนักงาน และแอดมินทุกคนในระบบพร้อมกัน
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          เพิ่มจำนวนแต้ม (+1 ถึง +5) 
                         </p>
                       </div>
 
@@ -1167,10 +1167,10 @@ export default function MerchantDashboard() {
                     {/* Reset points for all customers card */}
                     <div className="p-4 bg-slate-50 border border-pink-100/20 rounded-2xl flex flex-col justify-between space-y-4 hover:border-pink-100/50 transition-all">
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">
+                        <span className="text-sm font-bold text-rose-500 uppercase tracking-wider block">
                           ล้างแต้มทุกคนเป็น 0
                         </span>
-                        <p className="text-[9px] text-slate-500 leading-relaxed">
+                        <p className="text-xs text-slate-500 leading-relaxed">
                           ⚠️ เคลียร์แต้มสะสมทั้งหมดของทุกคนให้กลายเป็นศูนย์ (ไม่สามารถเรียกคืนประวัติแต้มเดิมได้)
                         </p>
                       </div>
@@ -1193,7 +1193,7 @@ export default function MerchantDashboard() {
 
                 {/* D. Shop Announcement Editor */}
                 <div className="pt-5 border-t border-pink-50 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <h4 className="text-base font-bold text-slate-700 flex items-center gap-1.5">
                     <Smartphone className="w-3.5 h-3.5 text-[#FF7DA0]" />
                     จัดการประกาศร้านค้า (Shop Announcement Editor)
                   </h4>
@@ -1221,14 +1221,14 @@ export default function MerchantDashboard() {
 
                 {/* E. Reward Config Panel */}
                 <div className="pt-5 border-t border-pink-50 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <h4 className="text-base font-bold text-slate-700 flex items-center gap-1.5">
                     <Gift className="w-3.5 h-3.5 text-emerald-500" />
                     จัดการรายการของรางวัล (Reward Config Panel)
                   </h4>
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-base font-semibold text-slate-700 block mb-1">
+                        <label className="text-xs font-semibold text-slate-700 block mb-1">
                           ชื่อของรางวัล
                         </label>
                         <input
@@ -1273,9 +1273,9 @@ export default function MerchantDashboard() {
                             key={r.id} 
                             className="p-3 bg-[#FCF8F9] border border-pink-100/20 rounded-xl flex items-center justify-between gap-3 text-xs"
                           >
-                            <div className="space-y-0.5">
-                              <span className="font-bold text-slate-700">{r.name}</span>
-                              <span className="block text-[10px] text-[#FF7DA0] font-bold font-mono">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold text-slate-700">{r.name}</span>
+                              <span className="block text-xs text-[#FF7DA0] font-bold font-mono">
                                 ใช้ {r.points} คะแนน
                               </span>
                             </div>
@@ -1302,7 +1302,7 @@ export default function MerchantDashboard() {
             <div className="bg-white border border-pink-100/50 p-5 rounded-3xl shadow-sm flex flex-col space-y-4 text-left">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                  ประวัติธุรกรรมแต้มสะสม
+                  History Log
                 </h3>
                 <button
                   onClick={() => fetchHistory(1)}

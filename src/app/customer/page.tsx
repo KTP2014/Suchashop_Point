@@ -426,7 +426,7 @@ export default function CustomerDashboard() {
               <Award className="w-5 h-5 text-white" />
             </div>
             <div className="flex flex-col text-left">
-              <span className="font-bold text-sm tracking-tight text-[#5C5556]">สะสมแต้ม Sucha Shop</span>
+              <span className="font-bold text-sm tracking-tight text-[#5C5556]">Sucha สะสมแต้ม</span>
               {profile?.role === "STAFF" && <span className="text-[9px] text-[#FF7DA0] font-bold">พนักงานร้าน</span>}
               {profile?.role === "ADMIN" && <span className="text-[9px] text-amber-500 font-bold">ผู้ดูแลระบบ</span>}
             </div>
@@ -533,16 +533,16 @@ export default function CustomerDashboard() {
               </div>
    
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-450 mb-1 self-start">
-                คะแนนสะสมทั้งหมดของคุณ (Lifetime Points)
+                คะแนนสะสมทั้งหมด
               </h2>
 
               <div className="w-full flex flex-col items-center justify-center py-5 bg-gradient-to-tr from-[#FFF5F6] to-[#FFF0F2] border border-pink-100/30 rounded-2xl shadow-inner mb-4">
                 <span className="text-5xl font-extrabold text-[#FF7DA0] font-sans tracking-tight">
                   {(profile?.currentPoints ?? 0) + (profile?.pendingPoints ?? 0)}
                 </span>
-                <span className="text-[10px] text-[#FF7DA0]/80 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-1">
+                <span className="text-[12px] text-[#FF7DA0]/80 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                  คะแนนพร้อมใช้สะสม
+                  แต้ม
                 </span>
               </div>
 
@@ -628,7 +628,7 @@ export default function CustomerDashboard() {
                         className="p-4 bg-[#FCF8F9] border border-pink-100/20 rounded-2xl flex items-center justify-between gap-3 text-xs"
                       >
                         <div className="space-y-1">
-                          <span className="text-lg font-bold text-slate-800 block leading-tight">{reward.name}</span>
+                          <span className="text-base font-bold text-slate-800 block leading-tight">{reward.name}</span>
                           <span className="block text-sm text-[#FF7DA0] font-bold">
                             ใช้ {reward.points} คะแนน
                           </span>

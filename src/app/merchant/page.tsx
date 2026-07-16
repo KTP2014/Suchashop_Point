@@ -455,8 +455,9 @@ export default function MerchantDashboard() {
       const rawToken = data.token;
       setActiveQR(rawToken);
 
-      const payloadString = JSON.stringify({ token: rawToken });
-      const qrDataUrl = await QRCode.toDataURL(payloadString, {
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID || "";
+      const qrUrl = `https://liff.line.me/${liffId}?token=${rawToken}`;
+      const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         width: 300,
         margin: 2,
         color: {

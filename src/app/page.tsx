@@ -31,11 +31,14 @@ export default function LoginPage() {
         const data = await res.json();
         const role = data.user?.role;
         
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token");
+
         // Explicitly route to merchant if ADMIN/STAFF/MERCHANT, else to customer (which includes CUSTOMER/PENDING_APPROVAL)
         if (role === "ADMIN" || role === "STAFF" || role === "MERCHANT") {
           router.push("/merchant");
         } else {
-          router.push("/customer");
+          router.push(token ? `/customer?token=${token}` : "/customer");
         }
       } else {
         const errData = await res.json().catch(() => ({}));

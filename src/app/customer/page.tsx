@@ -169,6 +169,40 @@ export default function CustomerDashboard() {
     };
   }, [activeRedeemToken, fetchProfile, selectedReward]);
 
+  const processScannedToken = useCallback(async (token: string) => {
+    setLoading(true);
+    setError(null);
+    setScanResultMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch("/api/customer/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "การรับแต้มถูกปฏิเสธ");
+      }
+
+      setSuccessModal({
+        isOpen: true,
+        title: "สะสมแต้มสำเร็จ! 🐾",
+        pointsText: `+${data.addedPoints} แต้ม`,
+        detailsText: `ยินดีด้วย! คุณได้รับแต้มสะสมเพิ่มจำนวน +${data.addedPoints} แต้มเข้าสู่ระบบเรียบร้อยแล้ว`,
+        type: "EARN",
+      });
+      await fetchProfile();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "ไม่สามารถสะสมแต้มจากรหัสนี้ได้";
+      showToast(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchProfile]);
+
   useEffect(() => {
     const checkLiffSession = async () => {
       if (liffLoading) return;
@@ -181,9 +215,18 @@ export default function CustomerDashboard() {
       setSyncingSession(false);
       await fetchProfile();
       await fetchConfig(); // Load rewards and announcement on load
+
+      // Auto-claim token if present in URL search params
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("token");
+      if (token && token.length === 64) {
+        // Clear token parameter from URL to prevent duplicate scanning on refresh
+        window.history.replaceState({}, document.title, window.location.pathname);
+        await processScannedToken(token);
+      }
     };
     checkLiffSession();
-  }, [liffInstance, liffLoading, router, fetchProfile, fetchConfig]);
+  }, [liffInstance, liffLoading, router, fetchProfile, fetchConfig, processScannedToken]);
 
   // Redirect admin or staff to merchant dashboard unless testing the customer view
   useEffect(() => {
@@ -290,7 +333,13 @@ export default function CustomerDashboard() {
           const parsed = JSON.parse(decodedText);
           if (parsed.token) targetToken = parsed.token;
         } catch {
-          // Raw text fallback
+          try {
+            const url = new URL(decodedText);
+            const t = url.searchParams.get("token");
+            if (t) targetToken = t;
+          } catch {
+            // Raw text fallback
+          }
         }
         await processScannedToken(targetToken);
       }
@@ -299,40 +348,6 @@ export default function CustomerDashboard() {
       showToast("การสแกนโค้ดล้มเหลว หรือไม่ได้รับอนุญาตให้ใช้กล้อง", "error");
     } finally {
       setScanning(false);
-    }
-  };
-
-  const processScannedToken = async (token: string) => {
-    setLoading(true);
-    setError(null);
-    setScanResultMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      const res = await fetch("/api/customer/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "การรับแต้มถูกปฏิเสธ");
-      }
-
-      setSuccessModal({
-        isOpen: true,
-        title: "สะสมแต้มสำเร็จ! 🐾",
-        pointsText: `+${data.addedPoints} แต้ม`,
-        detailsText: `ยินดีด้วย! คุณได้รับแต้มสะสมเพิ่มจำนวน +${data.addedPoints} แต้มเข้าสู่ระบบเรียบร้อยแล้ว`,
-        type: "EARN",
-      });
-      await fetchProfile();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "ไม่สามารถสะสมแต้มจากรหัสนี้ได้";
-      showToast(msg, "error");
-    } finally {
-      setLoading(false);
     }
   };
 

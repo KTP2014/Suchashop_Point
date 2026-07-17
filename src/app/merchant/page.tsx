@@ -222,7 +222,7 @@ export default function MerchantDashboard() {
     }
   }, [router, fetchConfig, fetchPendingStaff, fetchStaffList]);
 
-  const fetchHistory = useCallback(async (targetPage = page) => {
+  const fetchHistory = useCallback(async (targetPage: number) => {
     setLoadingHistory(true);
     let queryParams = `?page=${targetPage}&limit=6`;
     if (searchName.trim()) {
@@ -247,7 +247,7 @@ export default function MerchantDashboard() {
     } finally {
       setLoadingHistory(false);
     }
-  }, [page, searchName, actionType]);
+  }, [searchName, actionType]);
 
   const handleSaveConfig = async (updatedRewards = rewards, updatedAnnouncement = announcement) => {
     setSavingConfig(true);
@@ -504,10 +504,10 @@ export default function MerchantDashboard() {
             },
           },
           async (decodedText) => {
-            let targetToken = decodedText;
+            let targetToken = decodedText.trim();
             try {
               const parsed = JSON.parse(decodedText);
-              if (parsed.token) targetToken = parsed.token;
+              if (parsed.token) targetToken = parsed.token.trim();
             } catch {
               // Raw text fallback
             }
@@ -543,7 +543,7 @@ export default function MerchantDashboard() {
       const res = await fetch("/api/merchant/scan-redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token: token.trim() }),
       });
       const data = await res.json();
 
@@ -941,7 +941,7 @@ export default function MerchantDashboard() {
                   >
                     สะสมแต้ม (Earn)
                   </button>
-                  {/*<button
+                  <button
                     type="button"
                     onClick={() => setOtpActionType("REDEEM")}
                     className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
@@ -951,7 +951,7 @@ export default function MerchantDashboard() {
                     }`}
                   >
                     แลกรางวัล (Redeem)
-                  </button>*/}
+                  </button>
                 </div>
 
                 {otpActionType === "EARN" && (
@@ -1424,7 +1424,7 @@ export default function MerchantDashboard() {
                             )}
                           </div>
                           <div className="text-xs font-semibold text-slate-500">
-                            คงเหลือ: {tx.resultingCurrent} / {tx.resultingPending} แต้ม
+                            คงเหลือ: {tx.resultingCurrent + tx.resultingPending} แต้ม
                           </div>
                         </div>
 

@@ -302,7 +302,7 @@ export default function CustomerDashboard() {
       });
 
       setRedeemQrUrl(qrDataUrl);
-      setRedeemTtl(300); // 5 Minutes
+      setRedeemTtl(900); // 15 Minutes
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "ไม่สามารถขอคูปองแลกของรางวัลได้";
       setError(msg);

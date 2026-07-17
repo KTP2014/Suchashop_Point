@@ -14,7 +14,7 @@ export interface QRTokenPayload {
 }
 
 export class TokenGenerationService {
-  private readonly TOKEN_TTL = 300; // 5 Minutes (300 seconds)
+  private readonly TOKEN_TTL = 900; // 15 Minutes (900 seconds)
 
   /**
    * Generate a secure dynamic QR token for points earning with a merchant-defined points delta.

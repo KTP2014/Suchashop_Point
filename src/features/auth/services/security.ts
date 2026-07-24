@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { verifyToken, signToken } from "./jwt";
 import { prisma } from "../../../lib/prisma";
 import { AuthenticationError, AuthorizationError } from "../../../lib/errors";
@@ -11,7 +11,15 @@ import { Role, User } from "@prisma/client";
  */
 export async function secureRoute(allowedRoles: Role[]): Promise<User> {
   const cookieStore = await cookies();
-  const token = cookieStore.get("session")?.value;
+  const headersList = await headers();
+
+  let token = cookieStore.get("session")?.value;
+  if (!token) {
+    const authHeader = headersList.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    }
+  }
 
   if (!token) {
     throw new AuthenticationError("Authentication token is missing.");

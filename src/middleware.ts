@@ -21,7 +21,14 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isCustomerRoute || isMerchantRoute) {
-    const token = request.cookies.get("session")?.value;
+    let token = request.cookies.get("session")?.value;
+
+    if (!token) {
+      const authHeader = request.headers.get("authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7).trim();
+      }
+    }
 
     if (!token) {
       return handleUnauthorized(request, "Missing authentication token.");

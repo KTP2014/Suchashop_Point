@@ -6,13 +6,20 @@ import { prisma } from "../../../../lib/prisma";
 
 export async function POST(request: Request) {
   try {
-    const { lineUserId, displayName } = await request.json();
+    const body = await request.json();
+    const lineUserId = body.lineUserId;
+    let displayName = body.displayName;
 
     if (!lineUserId) {
       return NextResponse.json({ 
         success: false, 
         message: "Missing LINE User ID." 
       }, { status: 400 });
+    }
+
+    // OpenChat & Sandbox Null-Safety Fallback
+    if (!displayName || typeof displayName !== "string" || !displayName.trim()) {
+      displayName = "ผู้ใช้งาน LINE";
     }
 
     // Check if customer already exists in MongoDB
@@ -25,7 +32,7 @@ export async function POST(request: Request) {
       user = await prisma.user.create({
         data: {
           lineUserId,
-          displayName: displayName || null,
+          displayName: displayName || "ผู้ใช้งาน LINE",
           role: Role.CUSTOMER,
           currentPoints: 0,
           pendingPoints: 0,
@@ -109,6 +116,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
+      token, // Return token for OpenChat & blocked-cookie localStorage fallback
       user: {
         id: user.id,
         lineUserId: user.lineUserId,

@@ -37,7 +37,10 @@ export default function LoginPage() {
       }
 
       const lineUserId = profile.userId;
-      const displayName = profile.displayName;
+      let displayName = profile?.displayName;
+      if (!displayName || typeof displayName !== "string" || !displayName.trim()) {
+        displayName = "ผู้ใช้งาน LINE";
+      }
 
       // Call liff-login endpoint to set session cookie
       const res = await fetch("/api/auth/liff-login", {
@@ -48,6 +51,9 @@ export default function LoginPage() {
 
       if (res.ok) {
         const data = await res.json();
+        if (data.token) {
+          localStorage.setItem("auth_token", data.token);
+        }
         const role = data.user?.role;
         
         const urlParams = new URLSearchParams(window.location.search);

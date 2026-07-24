@@ -58,6 +58,17 @@ interface StaffMember {
   createdAt: string;
 }
 
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+};
+
 export default function MerchantDashboard() {
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -148,7 +159,7 @@ export default function MerchantDashboard() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const res = await fetch("/api/merchant/config");
+      const res = await fetch("/api/merchant/config", { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -164,7 +175,7 @@ export default function MerchantDashboard() {
   const fetchPendingStaff = useCallback(async () => {
     setLoadingPendingStaff(true);
     try {
-      const res = await fetch("/api/merchant/pending-staff");
+      const res = await fetch("/api/merchant/pending-staff", { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -181,7 +192,7 @@ export default function MerchantDashboard() {
   const fetchStaffList = useCallback(async () => {
     setLoadingStaffMembers(true);
     try {
-      const res = await fetch("/api/merchant/staff-list");
+      const res = await fetch("/api/merchant/staff-list", { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -197,7 +208,7 @@ export default function MerchantDashboard() {
 
   const checkUserAccess = useCallback(async () => {
     try {
-      const res = await fetch("/api/customer/profile");
+      const res = await fetch("/api/customer/profile", { headers: getAuthHeaders() });
       if (!res.ok) {
         router.push("/");
         return;
@@ -233,7 +244,9 @@ export default function MerchantDashboard() {
     }
 
     try {
-      const res = await fetch(`/api/merchant/history${queryParams}`);
+      const res = await fetch(`/api/merchant/history${queryParams}`, {
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลประวัติการทำรายการได้");
       const data = await res.json();
       if (data.success) {

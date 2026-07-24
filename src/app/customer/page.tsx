@@ -19,6 +19,17 @@ interface ProfileData {
   redeemedRewardIds?: string[];
 }
 
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+};
+
 export default function CustomerDashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -87,7 +98,9 @@ export default function CustomerDashboard() {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const res = await fetch("/api/customer/profile");
+      const res = await fetch("/api/customer/profile", {
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) {
         if (res.status === 401) {
           // Client-side auto-recovery clearing of invalid session
@@ -129,7 +142,9 @@ export default function CustomerDashboard() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const res = await fetch("/api/merchant/config");
+      const res = await fetch("/api/merchant/config", {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -148,7 +163,9 @@ export default function CustomerDashboard() {
 
     const intervalId = setInterval(async () => {
       try {
-        const res = await fetch(`/api/customer/redeem-status?token=${activeRedeemToken}`);
+        const res = await fetch(`/api/customer/redeem-status?token=${activeRedeemToken}`, {
+          headers: getAuthHeaders(),
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.status === "USED") {
@@ -191,7 +208,7 @@ export default function CustomerDashboard() {
     try {
       const res = await fetch("/api/customer/scan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ token }),
       });
       const data = await res.json();
@@ -289,7 +306,7 @@ export default function CustomerDashboard() {
     try {
       const res = await fetch("/api/customer/generate-redeem-qr", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           rewardId: reward.id,
           rewardPoints: reward.points,
@@ -383,7 +400,7 @@ export default function CustomerDashboard() {
     try {
       const res = await fetch("/api/customer/apply-staff", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ displayName: staffName.trim(), code: secretCode.trim() }),
       });
       const data = await res.json();

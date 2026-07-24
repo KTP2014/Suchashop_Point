@@ -51,7 +51,7 @@ export async function secureRoute(allowedRoles: Role[]): Promise<User> {
       cookieStore.set("session", newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: CUSTOMER_EXPIRY,
         path: "/",
       });

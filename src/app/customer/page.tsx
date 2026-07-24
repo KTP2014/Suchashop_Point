@@ -269,6 +269,8 @@ export default function CustomerDashboard() {
 
   const handleLogout = async () => {
     document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    localStorage.clear();
+    sessionStorage.clear();
     if (liffInstance) {
       liffInstance.logout();
     }

@@ -14,29 +14,11 @@ export default function LoginPage() {
 
   const { liff: liffInstance, isLoading: liffLoading } = useLiff();
 
-  const handleSessionReset = useCallback((liff?: Liff | null) => {
-    // 1. Clear session cookie
+  const clearLocalSessionData = useCallback(() => {
     document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
-    
-    // 2. Clear LocalStorage and SessionStorage
     localStorage.clear();
     sessionStorage.clear();
-    
-    // 3. Force logout from LIFF SDK to return to baseline state
-    const targetLiff = liff || liffInstance;
-    if (targetLiff) {
-      try {
-        if (targetLiff.isLoggedIn()) {
-          targetLiff.logout();
-        }
-      } catch (err) {
-        console.error("LIFF logout failed during recovery reset:", err);
-      }
-    }
-    
-    // 4. Force hard reload to login page to trigger fresh consent popup
-    window.location.replace(window.location.origin + window.location.pathname + window.location.search);
-  }, [liffInstance]);
+  }, []);
 
   const processLiffLogin = useCallback(async (liff: Liff) => {
     try {
@@ -46,7 +28,11 @@ export default function LoginPage() {
         profile = await liff.getProfile();
       } catch (profileErr) {
         console.error("LIFF getProfile failed - possible stale session:", profileErr);
-        handleSessionReset(liff);
+        clearLocalSessionData();
+        if (liff.isLoggedIn()) {
+          liff.logout();
+        }
+        window.location.replace(window.location.origin + window.location.pathname + window.location.search);
         return;
       }
 
@@ -76,7 +62,11 @@ export default function LoginPage() {
       } else {
         const errData = await res.json().catch(() => ({}));
         if (res.status === 401 || errData.message === "Session Invalid" || errData.message === "Unauthorized") {
-          handleSessionReset(liff);
+          clearLocalSessionData();
+          if (liff.isLoggedIn()) {
+            liff.logout();
+          }
+          window.location.replace(window.location.origin + window.location.pathname + window.location.search);
           return;
         }
         throw new Error(errData.message || "การเข้าสู่ระบบ LIFF ล้มเหลว");
@@ -86,7 +76,24 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อล็อกอินกับระบบ";
       setError(msg);
     }
-  }, [router, handleSessionReset]);
+  }, [router, clearLocalSessionData]);
+
+  const handleSessionReset = useCallback(async (liff?: Liff | null) => {
+    // 1. Clear session cookie & local storage
+    clearLocalSessionData();
+
+    // 2. Trigger auto-login or LIFF login immediately
+    const targetLiff = liff || liffInstance;
+    if (targetLiff) {
+      if (targetLiff.isLoggedIn()) {
+        await processLiffLogin(targetLiff);
+      } else {
+        targetLiff.login();
+      }
+    } else {
+      window.location.replace(window.location.origin + window.location.pathname + window.location.search);
+    }
+  }, [clearLocalSessionData, liffInstance, processLiffLogin]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -90,6 +90,19 @@ export default function CustomerDashboard() {
       const res = await fetch("/api/customer/profile");
       if (!res.ok) {
         if (res.status === 401) {
+          // Client-side auto-recovery clearing of invalid session
+          document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+          localStorage.clear();
+          sessionStorage.clear();
+          if (liffInstance) {
+            try {
+              if (liffInstance.isLoggedIn()) {
+                liffInstance.logout();
+              }
+            } catch (liffErr) {
+              console.error("LIFF logout failed during profile 401 reset:", liffErr);
+            }
+          }
           router.push("/");
           return;
         }
@@ -112,7 +125,7 @@ export default function CustomerDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, liffInstance]);
 
   const fetchConfig = useCallback(async () => {
     try {

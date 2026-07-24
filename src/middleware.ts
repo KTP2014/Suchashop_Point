@@ -72,7 +72,7 @@ function handleUnauthorized(request: NextRequest, message: string) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         code: "UNAUTHORIZED_ACCESS",
@@ -80,11 +80,19 @@ function handleUnauthorized(request: NextRequest, message: string) {
       },
       { status: 401 }
     );
+    if (request.cookies.has("session")) {
+      response.cookies.delete("session");
+    }
+    return response;
   }
 
   // Frontend routes are redirected to root login page
   const loginUrl = new URL("/", request.url);
-  return NextResponse.redirect(loginUrl);
+  const response = NextResponse.redirect(loginUrl);
+  if (request.cookies.has("session")) {
+    response.cookies.delete("session");
+  }
+  return response;
 }
 
 // Scopes matching middleware checks

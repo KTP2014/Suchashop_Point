@@ -10,13 +10,46 @@ import { useLiff } from "./providers";
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [showResetButton, setShowResetButton] = useState(false);
 
   const { liff: liffInstance, isLoading: liffLoading } = useLiff();
+
+  const handleSessionReset = useCallback((liff?: Liff | null) => {
+    // 1. Clear session cookie
+    document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+    
+    // 2. Clear LocalStorage and SessionStorage
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // 3. Force logout from LIFF SDK to return to baseline state
+    const targetLiff = liff || liffInstance;
+    if (targetLiff) {
+      try {
+        if (targetLiff.isLoggedIn()) {
+          targetLiff.logout();
+        }
+      } catch (err) {
+        console.error("LIFF logout failed during recovery reset:", err);
+      }
+    }
+    
+    // 4. Force hard reload to login page to trigger fresh consent popup
+    window.location.replace(window.location.origin + window.location.pathname + window.location.search);
+  }, [liffInstance]);
 
   const processLiffLogin = useCallback(async (liff: Liff) => {
     try {
       setError(null);
-      const profile = await liff.getProfile();
+      let profile;
+      try {
+        profile = await liff.getProfile();
+      } catch (profileErr) {
+        console.error("LIFF getProfile failed - possible stale session:", profileErr);
+        handleSessionReset(liff);
+        return;
+      }
+
       const lineUserId = profile.userId;
       const displayName = profile.displayName;
 
@@ -42,6 +75,10 @@ export default function LoginPage() {
         }
       } else {
         const errData = await res.json().catch(() => ({}));
+        if (res.status === 401 || errData.message === "Session Invalid" || errData.message === "Unauthorized") {
+          handleSessionReset(liff);
+          return;
+        }
         throw new Error(errData.message || "การเข้าสู่ระบบ LIFF ล้มเหลว");
       }
     } catch (err: unknown) {
@@ -49,7 +86,14 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อล็อกอินกับระบบ";
       setError(msg);
     }
-  }, [router]);
+  }, [router, handleSessionReset]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowResetButton(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (liffInstance && liffInstance.isLoggedIn()) {
@@ -177,6 +221,15 @@ export default function LoginPage() {
             <p className="text-[9px] text-slate-400 text-center leading-normal mt-1">
               สะสมแต้มอุ้งเท้าแมวแสนสะดวกผ่านบัญชี LINE ของคุณ 🐾
             </p>
+            {showResetButton && (
+              <button
+                type="button"
+                onClick={() => handleSessionReset(liffInstance)}
+                className="w-full py-2 text-[10px] text-slate-400 hover:text-[#FF7DA0] font-bold tracking-wider uppercase transition-all duration-300 mt-2 underline cursor-pointer"
+              >
+                พบปัญหาเข้าสู่ระบบ? รีเซ็ตการล็อกอิน (Reset Login)
+              </button>
+            )}
           </div>
 
           {/* =================================================================

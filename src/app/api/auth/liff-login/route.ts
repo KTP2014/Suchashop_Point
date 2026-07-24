@@ -32,12 +32,58 @@ export async function POST(request: Request) {
           version: 0,
         },
       });
-    } else if (displayName && user.displayName !== displayName) {
-      // Update display name if changed
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { displayName },
-      });
+    } else {
+      // Self-Healing & Non-Destructive Auto-Repair for existing users
+      const validRoles = [Role.CUSTOMER, Role.PENDING_APPROVAL, Role.STAFF, Role.ADMIN, Role.MERCHANT];
+      const isRoleCorrupted = !user.role || !validRoles.includes(user.role);
+      const isCurrentPointsMissing = typeof user.currentPoints !== "number" || Number.isNaN(user.currentPoints);
+      const isPendingPointsMissing = typeof user.pendingPoints !== "number" || Number.isNaN(user.pendingPoints);
+      const isVersionMissing = typeof user.version !== "number" || Number.isNaN(user.version);
+      const isDisplayNameChanged = displayName && user.displayName !== displayName;
+
+      if (isRoleCorrupted || isCurrentPointsMissing || isPendingPointsMissing || isVersionMissing || isDisplayNameChanged) {
+        const repairData: {
+          role?: Role;
+          currentPoints?: number;
+          pendingPoints?: number;
+          version?: number;
+          displayName?: string;
+        } = {};
+
+        // 1. Repair role safely: if corrupted/null, default to CUSTOMER
+        if (isRoleCorrupted) {
+          repairData.role = Role.CUSTOMER;
+          console.warn(`[AUTO-REPAIR] Repairing corrupted role for lineUserId: ${lineUserId} -> CUSTOMER`);
+        }
+
+        // 2. Preserve existing points or recalculate from transaction ledger if missing
+        if (isCurrentPointsMissing) {
+          const transactions = await prisma.transaction.findMany({
+            where: { customerId: user.id },
+          });
+          const reconstructedPoints = transactions.reduce((sum, tx) => sum + (tx.currentChange || 0), 0);
+          repairData.currentPoints = Math.max(0, reconstructedPoints);
+          console.warn(`[AUTO-REPAIR] Reconstructed points balance from transaction ledger for lineUserId: ${lineUserId} -> ${repairData.currentPoints} points`);
+        }
+
+        if (isPendingPointsMissing) {
+          repairData.pendingPoints = 0;
+        }
+
+        if (isVersionMissing) {
+          repairData.version = 0;
+        }
+
+        if (isDisplayNameChanged) {
+          repairData.displayName = displayName;
+        }
+
+        // Atomically update ONLY corrupted/updated fields while keeping existing points & history intact!
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: repairData,
+        });
+      }
     }
 
     // v2.0 Sign token with the latest database role

@@ -38,6 +38,17 @@ export async function secureRoute(allowedRoles: Role[]): Promise<User> {
     throw new AuthenticationError("User account not found.");
   }
 
+  // Self-Healing: Auto-repair corrupted/null role in DB without affecting points or other fields
+  const validRoles = [Role.CUSTOMER, Role.PENDING_APPROVAL, Role.STAFF, Role.ADMIN, Role.MERCHANT];
+  if (!user.role || !validRoles.includes(user.role)) {
+    console.warn(`[AUTO-REPAIR] Repairing null/invalid role for userId: ${user.id} -> CUSTOMER`);
+    const repairedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { role: Role.CUSTOMER },
+    });
+    user.role = repairedUser.role;
+  }
+
   // Dynamic Cookie Sync: If DB role differs from the JWT payload role, silently update cookie
   if (payload.role !== user.role) {
     try {
